@@ -39,3 +39,6 @@ WARNING: This is a development server. Do not use it in a production deployment.
 ---
 
 Let me know if you are stuck but try yourself first! 🚀
+
+images/app.png
+images/app1.png
