@@ -2,7 +2,6 @@ from flask import Flask, render_template, jsonify, request, Response
 import serial
 import time
 import threading
-import json
 import pandas as pd
 from datetime import datetime
 import os
@@ -22,8 +21,7 @@ latest_data = {
     'air': {'airQuality': 0, 'tvoc': 0, 'eCO2': 0},
     'other': {'ozone': 0, 'uvIndex': 0.0},
     'raw': '',
-    'timestamp': '',
-    'history': []
+    
 }
 
 # Connexion série
@@ -192,17 +190,6 @@ def index():
     """Page principale"""
     return render_template('index.html')
 
-@app.route('/api/data')
-def get_data():
-    """API pour récupérer les dernières données"""
-    with data_lock:
-        return jsonify(latest_data)
-
-@app.route('/api/history')
-def get_history():
-    """API pour récupérer l'historique des positions"""
-    with data_lock:
-        return jsonify(latest_data['history'])
 
 @app.route('/download')
 def download_excel():

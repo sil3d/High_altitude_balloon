@@ -393,27 +393,6 @@
                 });
         }
         
-        // Charger les données historiques au démarrage
-        fetch('/api/history')
-            .then(response => response.json())
-            .then(history => {
-                // Ajouter les points historiques à la trajectoire
-                if (history.length > 0) {
-                    const points = history.map(point => [point.lat, point.lon]);
-                    path.setLatLngs(points);
-                    
-                    // Centrer la carte sur le dernier point
-                    lastPosition = points[points.length - 1];
-                    map.setView(lastPosition, 10);
-                    
-                    // Créer le marqueur pour le dernier point
-                    marker = L.marker(lastPosition).addTo(map)
-                        .bindPopup('Ballon Stratosphérique').openPopup();
-                }
-            })
-            .catch(error => {
-                console.error('Erreur lors de la récupération de l\'historique:', error);
-            });
         
         // Démarrer la récupération périodique des données
         fetchData();

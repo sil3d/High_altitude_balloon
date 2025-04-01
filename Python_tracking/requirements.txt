@@ -1,5 +1,5 @@
-folium
+
 flask 
 pyserial 
-pandas 
-openpyxl
+pandas  
+openpyxl 
