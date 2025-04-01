@@ -1,0 +1,422 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi Ballon Stratosphérique - Somone, Sénégal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <style>
+        body {
+            padding-top: 20px;
+            background-color: #f5f5f5;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #map {
+            height: 500px;
+            border-radius: 5px;
+        }
+        .data-container {
+            font-size: 16px;
+        }
+        .badge-air-1 { background-color: #00e400; color: black; }
+        .badge-air-2 { background-color: #92d050; color: black; }
+        .badge-air-3 { background-color: #ffff00; color: black; }
+        .badge-air-4 { background-color: #ff7e00; color: white; }
+        .badge-air-5 { background-color: #ff0000; color: white; }
+        .metrics-title {
+            font-weight: bold;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+        }
+        .metric-box {
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .metric-box:hover {
+            transform: scale(1.02);
+            background-color: #e9ecef;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        .metric-name {
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .tracking-active {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(13, 110, 253, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Suivi Ballon Stratosphérique</h1>
+            <div>
+                <span class="badge bg-primary" id="update-status">En attente de données...</span>
+                <a href="/download" class="btn btn-success ms-2">Télécharger Excel</a>
+            </div>
+        </header>
+
+        <div class="row">
+            <!-- Carte GPS -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Position GPS</h5>
+                        <div>
+                            <button id="btn-track" class="btn btn-primary btn-sm">Activer le suivi</button>
+                            <button id="btn-center" class="btn btn-secondary btn-sm ms-2">Centrer carte</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="map"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Données GPS -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Données GPS</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="gps-status" class="alert alert-warning">En attente de signal GPS...</div>
+                        <div class="metric-box">
+                            <div class="metric-name">Latitude</div>
+                            <div id="gps-lat" class="metric-value">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-name">Longitude</div>
+                            <div id="gps-lon" class="metric-value">--</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-name">Altitude GPS</div>
+                            <div id="gps-alt" class="metric-value">--</div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">Satellites</div>
+                                    <div id="gps-sat" class="metric-value">--</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">Heure</div>
+                                    <div id="gps-time" class="metric-value">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <!-- Données Environnementales -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Environnement</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">Température</div>
+                                    <div id="env-temp" class="metric-value">--</div>
+                                    <div>°C</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">Humidité</div>
+                                    <div id="env-humidity" class="metric-value">--</div>
+                                    <div>%</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">Pression</div>
+                                    <div id="env-pressure" class="metric-value">--</div>
+                                    <div>hPa</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">Altitude Baro.</div>
+                                    <div id="env-altitude" class="metric-value">--</div>
+                                    <div>m</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Données Qualité d'Air -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Qualité de l'Air</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-box">
+                            <div class="metric-name">Indice de Qualité</div>
+                            <div class="d-flex justify-content-center align-items-center">
+                                <div id="air-quality" class="metric-value me-2">--</div>
+                                <span id="air-quality-text" class="badge">--</span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">TVOC</div>
+                                    <div id="air-tvoc" class="metric-value">--</div>
+                                    <div>ppb</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">CO₂ équivalent</div>
+                                    <div id="air-eco2" class="metric-value">--</div>
+                                    <div>ppm</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Autres Données -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Autres Données</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">Ozone</div>
+                                    <div id="other-ozone" class="metric-value">--</div>
+                                    <div>ppb</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="metric-box">
+                                    <div class="metric-name">Indice UV</div>
+                                    <div id="other-uv" class="metric-value">--</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="metric-box mt-3">
+                            <div class="metric-name">Dernière mise à jour</div>
+                            <div id="last-update" class="metric-value">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Données Brutes -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Données Brutes</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre id="raw-data" class="bg-light p-3 rounded">En attente de données...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-4 mb-4 text-center text-muted">
+            <p>Suivi de Ballon Stratosphérique - Somone, Sénégal - 2025</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script>
+        // Initialisation de la carte
+        const map = L.map('map').setView([14.4, -17.1], 10); // Coordonnées approx. de Somone, Sénégal
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Variables pour le suivi
+        let marker = null;
+        let path = L.polyline([], {color: 'red', weight: 3}).addTo(map);
+        let isTracking = false;
+        let lastPosition = null;
+        
+        // Fonction pour mettre à jour l'interface avec les nouvelles données
+        function updateUI(data) {
+            // Mise à jour du statut
+            document.getElementById('update-status').textContent = 'Dernière mise à jour: ' + data.timestamp;
+            
+            // Mise à jour des données GPS
+            if (data.gps.hasGPSFix) {
+                document.getElementById('gps-status').className = 'alert alert-success';
+                document.getElementById('gps-status').textContent = 'Signal GPS: OK';
+                document.getElementById('gps-lat').textContent = data.gps.lat.toFixed(6);
+                document.getElementById('gps-lon').textContent = data.gps.lon.toFixed(6);
+                document.getElementById('gps-alt').textContent = data.gps.alt.toFixed(1);
+                document.getElementById('gps-sat').textContent = data.gps.satellites;
+                document.getElementById('gps-time').textContent = data.gps.time;
+                
+                // Mise à jour de la carte
+                updateMap(data.gps.lat, data.gps.lon);
+            } else {
+                document.getElementById('gps-status').className = 'alert alert-warning';
+                document.getElementById('gps-status').textContent = 'En attente de signal GPS...';
+            }
+            
+            // Mise à jour des données environnementales
+            document.getElementById('env-temp').textContent = data.env.temperature.toFixed(1);
+            document.getElementById('env-humidity').textContent = data.env.humidity.toFixed(1);
+            document.getElementById('env-pressure').textContent = (data.env.pressure / 100).toFixed(1);
+            document.getElementById('env-altitude').textContent = data.env.altitude.toFixed(1);
+            
+            // Mise à jour des données de qualité d'air
+            document.getElementById('air-quality').textContent = data.air.airQuality;
+            const airQualityElement = document.getElementById('air-quality-text');
+            airQualityElement.className = `badge badge-air-${data.air.airQuality}`;
+            
+            switch(data.air.airQuality) {
+                case 1: airQualityElement.textContent = 'Excellent'; break;
+                case 2: airQualityElement.textContent = 'Bon'; break;
+                case 3: airQualityElement.textContent = 'Moyen'; break;
+                case 4: airQualityElement.textContent = 'Mauvais'; break;
+                case 5: airQualityElement.textContent = 'Malsain'; break;
+                default: airQualityElement.textContent = 'Inconnu'; break;
+            }
+            
+            document.getElementById('air-tvoc').textContent = data.air.tvoc;
+            document.getElementById('air-eco2').textContent = data.air.eCO2;
+            
+            // Mise à jour des autres données
+            document.getElementById('other-ozone').textContent = data.other.ozone;
+            document.getElementById('other-uv').textContent = data.other.uvIndex.toFixed(1);
+            
+            // Mise à jour de l'heure
+            document.getElementById('last-update').textContent = data.timestamp;
+            
+            // Mise à jour des données brutes
+            document.getElementById('raw-data').textContent = data.raw;
+        }
+        
+        // Fonction pour mettre à jour la carte
+        function updateMap(lat, lon) {
+            if (!lat || !lon) return;
+            
+            const newPosition = [lat, lon];
+            
+            // Créer ou déplacer le marqueur
+            if (!marker) {
+                marker = L.marker(newPosition).addTo(map)
+                    .bindPopup('Ballon Stratosphérique').openPopup();
+            } else {
+                marker.setLatLng(newPosition);
+            }
+            
+            // Ajouter un point au tracé
+            path.addLatLng(newPosition);
+            
+            // Si le mode suivi est activé, centrer la carte
+            if (isTracking) {
+                map.setView(newPosition);
+            }
+            
+            lastPosition = newPosition;
+        }
+        
+        // Gestion du bouton de suivi
+        document.getElementById('btn-track').addEventListener('click', function() {
+            isTracking = !isTracking;
+            
+            if (isTracking) {
+                this.textContent = 'Désactiver le suivi';
+                this.classList.add('tracking-active');
+                if (lastPosition) map.setView(lastPosition);
+            } else {
+                this.textContent = 'Activer le suivi';
+                this.classList.remove('tracking-active');
+            }
+        });
+        
+        // Gestion du bouton pour centrer la carte
+        document.getElementById('btn-center').addEventListener('click', function() {
+            if (lastPosition) {
+                map.setView(lastPosition);
+            }
+        });
+        
+        // Fonction pour récupérer régulièrement les données
+        function fetchData() {
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => {
+                    updateUI(data);
+                })
+                .catch(error => {
+                    console.error('Erreur lors de la récupération des données:', error);
+                })
+                .finally(() => {
+                    // Rafraîchir toutes les 2 secondes
+                    setTimeout(fetchData, 2000);
+                });
+        }
+        
+        // Charger les données historiques au démarrage
+        fetch('/api/history')
+            .then(response => response.json())
+            .then(history => {
+                // Ajouter les points historiques à la trajectoire
+                if (history.length > 0) {
+                    const points = history.map(point => [point.lat, point.lon]);
+                    path.setLatLngs(points);
+                    
+                    // Centrer la carte sur le dernier point
+                    lastPosition = points[points.length - 1];
+                    map.setView(lastPosition, 10);
+                    
+                    // Créer le marqueur pour le dernier point
+                    marker = L.marker(lastPosition).addTo(map)
+                        .bindPopup('Ballon Stratosphérique').openPopup();
+                }
+            })
+            .catch(error => {
+                console.error('Erreur lors de la récupération de l\'historique:', error);
+            });
+        
+        // Démarrer la récupération périodique des données
+        fetchData();
+    </script>
+</body>
+</html>

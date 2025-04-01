@@ -1,0 +1,3 @@
+https://how2electronics.com/interfacing-pms5003-air-quality-sensor-arduino/
+
+https://electropeak.com/learn/interfacing-guva-s12sd-uv-light-sensor-module-with-arduino/

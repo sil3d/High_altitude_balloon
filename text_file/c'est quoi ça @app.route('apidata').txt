@@ -1,0 +1,13 @@
+c'est quoi ça??? @app.route('/api/data')
+def get_data():
+    """API pour récupérer les dernières données"""
+    with data_lock:
+        return jsonify(latest_data)
+
+@app.route('/api/history')
+def get_history():
+    """API pour récupérer l'historique des positions"""
+    with data_lock:
+        return jsonify(latest_data['history'])
+
+voici j'ai pas d'API donc il me sert à rien lorsque je parle des données en temps réel c'est juste les donnée qui viennet du lora c'est tout donc pas d'api

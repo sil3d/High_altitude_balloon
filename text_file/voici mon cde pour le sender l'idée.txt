@@ -1,0 +1,305 @@
+voici mon cde pour le sender l'idée faire un high altitude ballon j'ai déjà tout les code mais je veux juste les combiner voice le code pour les gps combine les code affiche seulement les infos importante sur le display car se code va dans le ciel donc pas l'interet de tout 
+display ici il faut un autre code pour de receiver
+
+//sender code for lilygo with t-display and lora
+
+#include <SPI.h>
+#include <LoRa.h>
+#include <TinyGPSPlus.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+TinyGPSPlus gps;
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET    -1
+#define SCREEN_ADDRESS 0x3C
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+#define LORA_SCK 5
+#define LORA_MISO 19
+#define LORA_MOSI 27
+#define LORA_CS 18
+#define LORA_RST 23
+#define LORA_IRQ 26
+
+const int blueLED = 4; // LED bleue pour indiquer l'envoi de données
+
+void setup() {
+  Serial.begin(115200);
+  Serial1.begin(9600, SERIAL_8N1, 34, 12); // TX = 34, RX = 12 pour GPS
+
+  // Initialisation de l'OLED
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+    Serial.println("Échec de l'initialisation de l'OLED !");
+    while (1);
+  }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+
+  // Initialisation du module LoRa
+  SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_CS);
+  LoRa.setPins(LORA_CS, LORA_RST, LORA_IRQ);
+
+  pinMode(blueLED, OUTPUT);
+
+  if (!LoRa.begin(868E6)) { // Fréquence LoRa adaptée à votre région
+    Serial.println("Starting LoRa failed!");
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("LoRa failed!");
+    display.display();
+    while (1);
+  }
+  LoRa.setSpreadingFactor(7); // Facteur d'étalement
+  LoRa.setTxPower(14, PA_OUTPUT_PA_BOOST_PIN); // Puissance d'émission
+}
+
+void loop() {
+  // Lecture des données GPS
+  while (Serial1.available()) {
+    char c = Serial1.read();
+    gps.encode(c);
+  }
+
+  // Envoi des données GPS via LoRa
+  if (gps.location.isValid()) {
+    digitalWrite(blueLED, HIGH); // Allumer la LED bleue pendant l'envoi
+
+    LoRa.beginPacket();
+    LoRa.print("Lat: ");
+    LoRa.print(gps.location.lat(), 6);
+    LoRa.print(", Lng: ");
+    LoRa.print(gps.location.lng(), 6);
+    LoRa.print(", Alt: ");
+    LoRa.print(gps.altitude.meters());
+    LoRa.print(" m, Sats: ");
+    LoRa.print(gps.satellites.value());
+    LoRa.print(", Time: ");
+    LoRa.printf("%.2d:%.2d:%.2d", gps.time.hour(), gps.time.minute(), gps.time.second());
+    LoRa.endPacket();
+
+    digitalWrite(blueLED, LOW); // Éteindre la LED bleue
+  }
+
+  // Affichage des données GPS sur l'OLED
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  if (gps.location.isValid()) {
+    display.print("Lat: ");
+    display.println(gps.location.lat(), 6);
+    display.print("Lng: ");
+    display.println(gps.location.lng(), 6);
+    display.print("Alt: ");
+    display.print(gps.altitude.meters());
+    display.println(" m");
+    display.print("Sats: ");
+    display.println(gps.satellites.value());
+    display.print("Time: ");
+    display.printf("%.2d:%.2d:%.2d", gps.time.hour(), gps.time.minute(), gps.time.second());
+  } else {
+    display.println("Searching for GPS...");
+    display.print("Satellites: ");
+    display.println(gps.satellites.value());
+  }
+  display.display();
+
+  delay(5000); // Envoyer des données toutes les 5 secondes
+}
+
+//sender code for lilygo with t-display and lora
+
+/////Envirronement sensor
+
+#include <DFRobot_ENS160.h>
+#include "DFRobot_BME280.h"
+
+#define SEA_LEVEL_PRESSURE    1015.0f
+
+DFRobot_ENS160_I2C ENS160(&Wire, /*i2cAddr*/ 0x53);
+typedef DFRobot_BME280_IIC    BME;    // ******** use abbreviations instead of full names ********
+BME   bme(&Wire, 0x77);   // select TwoWire peripheral and set sensor address
+
+// show last sensor operate status
+void printLastOperateStatus(BME::eStatus_t eStatus)
+{
+  switch(eStatus) {
+  case BME::eStatusOK:    Serial.println("everything ok"); break;
+  case BME::eStatusErr:   Serial.println("unknow error"); break;
+  case BME::eStatusErrDeviceNotDetected:    Serial.println("device not detected"); break;
+  case BME::eStatusErrParameter:    Serial.println("parameter error"); break;
+  default: Serial.println("unknow status"); break;
+  }
+}
+
+void setup(void)
+{
+  Serial.begin(115200);
+  bme.reset();
+  Serial.println("bme read data test");
+  while(bme.begin() != BME::eStatusOK) {
+    Serial.println("bme begin faild");
+    printLastOperateStatus(bme.lastOperateStatus);
+    delay(2000);
+  }
+  Serial.println("bme begin success");
+  delay(100);
+  // Init the sensor
+  while( NO_ERR != ENS160.begin() ){
+    Serial.println("Communication with device failed, please check connection");
+    delay(3000);
+  }
+
+  /**
+   * Set power mode
+   * mode Configurable power mode:
+   *   ENS160_SLEEP_MODE: DEEP SLEEP mode (low power standby)
+   *   ENS160_IDLE_MODE: IDLE mode (low-power)
+   *   ENS160_STANDARD_MODE: STANDARD Gas Sensing Modes
+   */
+  ENS160.setPWRMode(ENS160_STANDARD_MODE);
+
+  /**
+   * Users write ambient temperature and relative humidity into ENS160 for calibration and compensation of the measured gas data.
+   * ambientTemp Compensate the current ambient temperature, float type, unit: C
+   * relativeHumidity Compensate the current ambient temperature, float type, unit: %rH
+   */
+  ENS160.setTempAndHum(/*temperature=*/bme.getTemperature(), /*humidity=*/bme.getHumidity());
+
+}
+
+void loop()
+{
+  float   temp = bme.getTemperature();
+  uint32_t    press = bme.getPressure();
+  float   alti = bme.calAltitude(SEA_LEVEL_PRESSURE, press);
+  float   humi = bme.getHumidity();
+
+  Serial.println();
+  Serial.println("======== start print ========");
+  Serial.print("temperature (unit Celsius): "); Serial.println(temp);
+  Serial.print("pressure (unit pa):         "); Serial.println(press);
+  Serial.print("altitude (unit meter):      "); Serial.println(alti);
+  Serial.print("humidity (unit percent):    "); Serial.println(humi);
+  Serial.println("========  end print  ========");
+  /**
+   * Get the sensor operating status
+   * Return value: 0-Normal operation, 
+   *         1-Warm-Up phase, first 3 minutes after power-on.
+   *         2-Initial Start-Up phase, first full hour of operation after initial power-on. Only once in the sensor’s lifetime.
+   * note: Note that the status will only be stored in the non-volatile memory after an initial 24h of continuous
+   *       operation. If unpowered before conclusion of said period, the ENS160 will resume "Initial Start-up" mode
+   *       after re-powering.
+   */
+  uint8_t Status = ENS160.getENS160Status();
+  Serial.print("Sensor operating status : ");
+  Serial.println(Status);
+  /**
+   * Get the air quality index
+   * Return value: 1-Excellent, 2-Good, 3-Moderate, 4-Poor, 5-Unhealthy
+   */
+  uint8_t AQI = ENS160.getAQI();
+  Serial.print("Air quality index : ");
+  Serial.println(AQI);
+
+  /**
+   * Get TVOC concentration
+   * Return value range: 0–65000, unit: ppb
+   */
+  uint16_t TVOC = ENS160.getTVOC();
+  Serial.print("Concentration of total volatile organic compounds : ");
+  Serial.print(TVOC);
+  Serial.println(" ppb");
+
+  /**
+   * Get CO2 equivalent concentration calculated according to the detected data of VOCs and hydrogen (eCO2 – Equivalent CO2)
+   * Return value range: 400–65000, unit: ppm
+   * Five levels: Excellent(400 - 600), Good(600 - 800), Moderate(800 - 1000), 
+   *               Poor(1000 - 1500), Unhealthy(> 1500)
+   */
+  uint16_t ECO2 = ENS160.getECO2();
+  Serial.print("Carbon dioxide equivalent concentration : ");
+  Serial.print(ECO2);
+  Serial.println(" ppm");
+  Serial.println();
+
+  delay(1000);
+}
+/////Envirronement sensor
+
+///////ozone Gravity SEN0321
+#include "DFRobot_OzoneSensor.h"
+
+#define COLLECT_NUMBER   20            // collect number, the collection range is 1-100
+#define Ozone_IICAddress OZONE_ADDRESS_3
+/*   iic slave Address, The default is ADDRESS_3
+       ADDRESS_0               0x70      // iic device address
+       ADDRESS_1               0x71
+       ADDRESS_2               0x72
+       ADDRESS_3               0x73
+*/
+DFRobot_OzoneSensor Ozone;
+void setup() 
+{
+  Serial.begin(9600);
+  while(!Ozone.begin(Ozone_IICAddress)) {
+    Serial.println("I2c device number error !");
+    delay(1000);
+  }  Serial.println("I2c connect success !");
+/*   Set iic mode, active mode or passive mode
+       MEASURE_MODE_AUTOMATIC            // active  mode
+       MEASURE_MODE_PASSIVE              // passive mode
+*/
+    Ozone.setModes(MEASURE_MODE_PASSIVE);
+}
+
+
+void loop() 
+{
+/*   Smooth data collection
+       COLLECT_NUMBER                    // The collection range is 1-100
+*/
+  int16_t ozoneConcentration = Ozone.readOzoneData(COLLECT_NUMBER);
+  Serial.print("Ozone concentration is ");
+  Serial.print(ozoneConcentration);
+  Serial.println(" PPB.");
+  delay(1000);
+}
+///////ozone Gravity SEN0321
+
+//UV SENSOR for this code i don't know why, but i don't use 15 in real life it can retrieve data for 3.3V and GND only 
+//on the T-display lora32 LILYGO
+
+#define UV_SENSOR_PIN 15  // Pin ADC de l'ESP32 connecté à SIG du capteur
+
+void setup() {
+    Serial.begin(115200);  // Initialisation de la communication série
+    delay(1000);           // Pause pour stabiliser le capteur
+    analogReadResolution(12);  // ESP32 : Résolution ADC de 12 bits (0 - 4095)
+    pinMode(UV_SENSOR_PIN, INPUT);  // Définir le pin comme entrée
+}
+
+void loop() {
+    int rawValue = analogRead(UV_SENSOR_PIN);  // Lecture de la valeur brute ADC
+
+    if (rawValue > 0) {
+        float voltage = rawValue * (3.3 / 4095.0);  // Conversion en tension (0V - 3.3V)
+        float uvIndex = voltage / 0.1;  // Approximation de l'indice UV (0.1V ≈ 1 UV)
+
+        Serial.print("Valeur ADC : ");
+        Serial.print(rawValue);
+        Serial.print(" | Tension : ");
+        Serial.print(voltage, 2);
+        Serial.print("V | Indice UV estimé : ");
+        Serial.println(uvIndex, 2);
+    } else {
+        Serial.println("Erreur : aucune donnée reçue du capteur !");
+    }
+
+    delay(1000);  // Attendre 1 seconde avant la prochaine lecture
+}
+//UV SENSOR
