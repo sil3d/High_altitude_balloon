@@ -1,0 +1,204 @@
+/* === Général === */
+body {
+    padding-top: 56px; /* Ajuste si la navbar a une hauteur différente */
+    background-color: #f4f7f6; /* Fond très légèrement teinté */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Police plus moderne */
+    color: #333; /* Couleur de texte par défaut */
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Ombre légère sous la navbar */
+}
+
+/* === Conteneur Principal === */
+.container-fluid {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+}
+
+/* === Carte === */
+#map {
+    height: calc(85vh - 56px); /* Hauteur ajustée en fonction de la navbar et du padding */
+    width: 100%;
+    border-radius: 8px; /* Coins arrondis pour la carte */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* Ombre plus prononcée */
+    border: 1px solid #dee2e6; /* Bordure légère */
+}
+
+.card-map-container { /* Ajoute cette classe au div parent de #map si besoin */
+     padding: 0; /* Enlève le padding du card-body pour la map */
+}
+
+/* === Colonne des Données === */
+.data-column .card {
+    background-color: #ffffff; /* Fond blanc pur pour la carte de données */
+    border: none; /* Pas de bordure par défaut, on utilise l'ombre */
+    border-radius: 8px; /* Coins arrondis */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08); /* Ombre subtile */
+    height: calc(85vh - 56px); /* Même hauteur que la carte */
+    display: flex;
+    flex-direction: column;
+}
+
+.data-column .card-header {
+    background-color: #f8f9fa; /* Fond légèrement gris pour l'en-tête */
+    border-bottom: 1px solid #e9ecef; /* Ligne de séparation */
+    font-weight: 600; /* Titre en gras */
+    padding: 0.8rem 1.2rem;
+}
+
+/* === Conteneur des Données (Scrollable) === */
+.data-container {
+    padding: 1.2rem;
+    overflow-y: auto; /* Barre de défilement si nécessaire */
+    flex-grow: 1; /* Prend la hauteur restante */
+     scrollbar-width: thin; /* Firefox */
+     scrollbar-color: #adb5bd #f8f9fa; /* Firefox */
+}
+/* Style de la barre de défilement pour Webkit (Chrome, Safari) */
+.data-container::-webkit-scrollbar {
+    width: 8px;
+}
+.data-container::-webkit-scrollbar-track {
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+.data-container::-webkit-scrollbar-thumb {
+    background-color: #adb5bd;
+    border-radius: 4px;
+    border: 2px solid #f8f9fa; /* Espace autour du pouce */
+}
+
+
+/* === Sections de Données (GPS, Env, etc.) === */
+.data-container h5 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #0d6efd; /* Couleur bleue Bootstrap pour les titres */
+    margin-top: 1.2rem; /* Espace au-dessus des titres (sauf le premier) */
+    margin-bottom: 0.8rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #e9ecef; /* Ligne sous les titres */
+}
+.data-container h5:first-of-type {
+    margin-top: 0; /* Pas d'espace au-dessus du premier titre */
+}
+
+/* === Points de Données individuels (Label + Valeur) === */
+.data-container p {
+    margin-bottom: 0.6rem; /* Espace entre les lignes de données */
+    font-size: 0.95rem; /* Taille de police légèrement réduite */
+    display: flex; /* Utilise flexbox pour aligner label et valeur */
+    justify-content: space-between; /* Espace entre label et valeur */
+    line-height: 1.4;
+}
+
+.data-container p strong {
+    color: #495057; /* Couleur plus sombre pour les labels */
+    font-weight: 600; /* Labels en gras */
+    margin-right: 8px; /* Espace après le label */
+}
+
+/* Style spécifique pour les valeurs (les spans avec des ID) */
+.data-container p span[id^="data-"] {
+    color: #212529; /* Couleur standard pour les valeurs */
+    font-weight: 500; /* Valeurs légèrement en gras */
+    text-align: right; /* Aligne la valeur à droite */
+    word-break: break-word; /* Pour les longues valeurs sans espace */
+}
+
+/* Style spécifique pour le statut GPS */
+#gps-status {
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    display: inline-block; /* Pour que le fond s'applique correctement */
+    margin-bottom: 0.8rem;
+}
+#gps-status.text-success { background-color: rgba(25, 135, 84, 0.1); } /* Vert léger */
+#gps-status.text-warning { background-color: rgba(255, 193, 7, 0.1); } /* Jaune léger */
+#gps-status.text-danger { background-color: rgba(220, 53, 69, 0.1); } /* Rouge léger */
+
+/* === Boîte Données Brutes === */
+.data-container h5#raw-data-title { /* ID ajouté au h5 des données brutes dans l'HTML si besoin */
+     margin-top: 1.5rem;
+}
+
+.raw-data-box {
+    background-color: #e9ecef;
+    padding: 10px 12px;
+    border-radius: 5px;
+    font-family: 'Courier New', Courier, monospace; /* Police mono-espacée */
+    word-break: break-all;
+    max-height: 150px; /* Conserve la limite de hauteur */
+    overflow-y: auto;
+    font-size: 0.85em; /* Taille légèrement augmentée */
+    line-height: 1.5;
+    border: 1px solid #ced4da; /* Bordure légère */
+    margin-top: 0.5rem; /* Espace au-dessus */
+     scrollbar-width: thin; /* Firefox */
+     scrollbar-color: #adb5bd #e9ecef; /* Firefox */
+}
+.raw-data-box::-webkit-scrollbar { width: 6px; }
+.raw-data-box::-webkit-scrollbar-track { background: #e9ecef; border-radius: 3px;}
+.raw-data-box::-webkit-scrollbar-thumb { background-color: #adb5bd; border-radius: 3px; border: 1px solid #e9ecef;}
+
+
+/* === Boutons et Actions === */
+.data-container h5#actions-title { /* ID ajouté au h5 des actions dans l'HTML si besoin */
+    margin-top: 1.5rem;
+}
+.data-container .btn {
+    margin-top: 0.5rem; /* Espace au-dessus des boutons */
+}
+.btn i {
+    margin-right: 6px; /* Espace icône-texte */
+}
+
+/* === Pied de page de la carte (Distance) === */
+.card-map-footer { /* Ajoute cette classe au card-footer sous la carte */
+    background-color: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+}
+#distance-info strong {
+    color: #495057;
+}
+
+/* === Message d'erreur === */
+.card-footer.error-footer { /* Ajoute cette classe au card-footer d'erreur */
+     background-color: rgba(220, 53, 69, 0.1); /* Fond rouge très léger */
+     border-top: 1px solid rgba(220, 53, 69, 0.3);
+     padding: 0.6rem 1.2rem;
+     font-size: 0.9rem;
+}
+#error-message .text-danger {
+    font-weight: 600;
+}
+
+/* === Statut Série Navbar === */
+#serial-status .badge {
+    font-size: 0.85em;
+    padding: 0.4em 0.6em;
+}
+
+/* === Style Bouton Suivi Actif === */
+#track-balloon-btn.active {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+/* === Responsive (Optionnel, si besoin d'ajustements spécifiques) === */
+@media (max-width: 992px) { /* Pour les écrans plus petits que large */
+    #map {
+        height: 50vh; /* Réduit la hauteur de la carte */
+    }
+    .data-column .card {
+        height: auto; /* Hauteur automatique pour les données */
+        margin-bottom: 1rem; /* Ajoute de l'espace en dessous */
+    }
+    .data-container {
+         max-height: 45vh; /* Limite aussi la hauteur des données */
+    }
+}

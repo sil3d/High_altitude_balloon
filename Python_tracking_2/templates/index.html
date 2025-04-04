@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi Ballon Strato</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">🚀 Suivi Ballon Strato (Somone)</a>
+            <span class="navbar-text" id="serial-status">
+                Statut Série: <span class="badge bg-warning text-dark">Attente...</span>
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        <div class="row">
+            <!-- Colonne Données -->
+            <div class="col-lg-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header">
+                        Données en Temps Réel
+                        <small class="text-muted float-end" id="last-update">Jamais mis à jour</small>
+                    </div>
+                    <div class="card-body data-container">
+                        <h5>GPS</h5>
+                        <p id="gps-status" class="text-warning">En attente...</p>
+                        <div id="gps-data" style="display: none;">
+                            <p><strong>Latitude:</strong> <span id="data-lat">N/A</span></p>
+                            <p><strong>Longitude:</strong> <span id="data-lon">N/A</span></p>
+                            <p><strong>Altitude (GPS):</strong> <span id="data-alt-gps">N/A</span> m</p>
+                            <p><strong>Satellites:</strong> <span id="data-sat">N/A</span></p>
+                            <p><strong>Heure GPS:</strong> <span id="data-time">N/A</span></p>
+                        </div>
+
+                        <hr>
+                        <h5>Environnement</h5>
+                        <p><strong>Température:</strong> <span id="data-temp">N/A</span> °C</p>
+                        <p><strong>Pression:</strong> <span id="data-press">N/A</span> hPa</p>
+                        <p><strong>Humidité:</strong> <span id="data-hum">N/A</span> %</p>
+                        <p><strong>Altitude (Baro):</strong> <span id="data-alt-baro">N/A</span> m</p>
+
+                        <hr>
+                        <h5>Qualité d'Air</h5>
+                        <p><strong>Indice:</strong> <span id="data-aq">N/A</span> (<span id="data-aq-index">N/A</span>)</p>
+                        <p><strong>TVOC:</strong> <span id="data-tvoc">N/A</span> ppb</p>
+                        <p><strong>eCO2:</strong> <span id="data-eco2">N/A</span> ppm</p>
+
+                        <hr>
+                        <h5>Autres</h5>
+                        <p><strong>Ozone:</strong> <span id="data-ozone">N/A</span> ppb</p>
+                        <p><strong>Indice UV:</strong> <span id="data-uv">N/A</span></p>
+
+                        <hr>
+                        <h5>Données Brutes</h5>
+                        <pre id="raw-data" class="raw-data-box">En attente...</pre>
+
+                        <hr>
+                        <h5>Actions</h5>
+                         <a href="/download_excel" class="btn btn-success mb-2 w-100">
+                            <i class="fas fa-download"></i> Télécharger Données (Excel)
+                         </a>
+                    </div>
+                     <div class="card-footer text-muted" id="error-message" style="display: none;">
+                        <span class="text-danger">Erreur:</span> <span id="error-text"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Colonne Carte -->
+            <div class="col-lg-8">
+                <div class="card">
+                     <div class="card-header d-flex justify-content-between align-items-center">
+                       <span>Carte de Suivi</span>
+                       <div>
+                           <button id="track-balloon-btn" class="btn btn-sm btn-primary me-2">
+                               <i class="fas fa-satellite-dish"></i> Suivre Ballon
+                           </button>
+                           <button id="track-me-btn" class="btn btn-sm btn-info me-2">
+                               <i class="fas fa-location-arrow"></i> Ma Position
+                            </button>
+                           <button id="center-map-btn" class="btn btn-sm btn-secondary">
+                               <i class="fas fa-compress-arrows-alt"></i> Centrer Tout
+                           </button>
+                       </div>
+                    </div>
+                    <div class="card-body p-0">
+                         <div id="map"></div>
+                    </div>
+                     <div class="card-footer">
+                        <p id="distance-info" class="mb-0"><strong>Distance Ballon-Moi:</strong> En attente de positions...</p>
+                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <!-- Font Awesome (pour les icônes) -->
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+    <!-- Socket.IO Client JS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
