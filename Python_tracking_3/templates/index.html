@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi Ballon Stratosphérique</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Leaflet Routing Machine CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <style>
+        /* Styles spécifiques à la page */
+        #map { height: 500px; width: 100%; }
+        .data-card { margin-bottom: 1rem; }
+        .value { font-weight: bold; color: #0d6efd; } /* Bleu Bootstrap */
+        .unit { font-size: 0.9em; color: #6c757d; } /* Gris Bootstrap */
+        #altitudeChartContainer { height: 300px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">🛰️ Suivi Ballon</a>
+             <button class="btn btn-outline-light ms-auto" id="downloadCsvBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download me-1" viewBox="0 0 16 16">
+                  <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                  <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                </svg>
+                Télécharger CSV
+            </button>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Colonne Gauche: Carte et Contrôles -->
+            <div class="col-lg-7 col-md-12">
+                <div class="card data-card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        📍 Carte de Suivi
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="map"></div>
+                    </div>
+                    <div class="card-footer text-muted d-flex justify-content-between align-items-center flex-wrap">
+                         <div>
+                             <button class="btn btn-sm btn-success me-2 mb-1" id="trackMeBtn">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-bounding-box" viewBox="0 0 16 16">
+                                  <path d="M1.5 1a.5.5 0 0 0-.5.5v3a.5.5 0 0 1-1 0v-3A1.5 1.5 0 0 1 1.5 0h3a.5.5 0 0 1 0 1h-3zM11 .5a.5.5 0 0 1 .5-.5h3A1.5 1.5 0 0 1 16 1.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5zM.5 11a.5.5 0 0 1 .5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 1 0 1h-3A1.5 1.5 0 0 1 0 14.5v-3a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v3a1.5 1.5 0 0 1-1.5 1.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 1 .5-.5z"/>
+                                  <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+                                </svg>
+                                Ma Position
+                             </button>
+                             <button class="btn btn-sm btn-info me-2 mb-1" id="toggleTrackBalloonBtn">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-broadcast-pin" viewBox="0 0 16 16">
+                                   <path d="M3.05 3.05a7 7 0 0 0 0 9.9.5.5 0 0 1-.707.707 8 8 0 0 1 0-11.314.5.5 0 0 1 .707.707zm2.122 2.122a4 4 0 0 0 0 5.656.5.5 0 1 1-.708.708 5 5 0 0 1 0-7.072.5.5 0 0 1 .708.708zm5.656-.708a.5.5 0 0 1 .708 0 5 5 0 0 1 0 7.072.5.5 0 1 1-.708-.708 4 4 0 0 0 0-5.656.5.5 0 0 1 0-.708zm2.122-2.12a.5.5 0 0 1 .707 0 8 8 0 0 1 0 11.313.5.5 0 0 1-.707-.707 7 7 0 0 0 0-9.9.5.5 0 0 1 0-.707zM6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
+                                 </svg>
+                                Suivi Ballon: OFF
+                            </button>
+                         </div>
+                         <div class="mt-1 mt-sm-0">
+                             <small>Distance: <span id="distanceDisplay" class="value">N/A</span></small>
+                         </div>
+                    </div>
+                </div>
+
+                <div class="card data-card shadow-sm">
+                    <div class="card-header bg-secondary text-white">
+                        📈 Graphique d'Altitude (Barométrique)
+                    </div>
+                    <div class="card-body">
+                         <div id="altitudeChartContainer">
+                            <canvas id="altitudeChart"></canvas>
+                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Colonne Droite: Données Détaillées -->
+            <div class="col-lg-5 col-md-12">
+                <!-- Statut Connexion -->
+                <div class="alert alert-info d-flex align-items-center" role="alert" id="statusIndicator">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-info-circle-fill flex-shrink-0 me-2" viewBox="0 0 16 16" role="img" aria-label="Info:">
+                        <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+                    </svg>
+                    <div>
+                        Connexion WebSocket: <span id="wsStatus">En attente...</span> | Données Arduino: <span id="arduinoStatus">En attente...</span>
+                    </div>
+                </div>
+
+                 <!-- Dernières Données Brutes -->
+                <div class="card data-card shadow-sm">
+                    <div class="card-header">
+                        RAW Data (Dernière reçue)
+                    </div>
+                    <div class="card-body">
+                        <small><code id="rawDataDisplay" style="word-break: break-all;">Aucune donnée brute reçue...</code></small>
+                    </div>
+                    <div class="card-footer text-muted">
+                        <small>Dernière MàJ: <span id="lastUpdateTimestamp">N/A</span></small>
+                    </div>
+                </div>
+
+                <!-- Données GPS -->
+                <div class="card data-card shadow-sm">
+                    <div class="card-header">
+                        🛰️ Données GPS
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">Latitude: <span id="data-lat" class="value">N/A</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Longitude: <span id="data-lon" class="value">N/A</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Altitude (GPS): <span id="data-alt-gps" class="value">N/A</span> <span class="unit">m</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Satellites: <span id="data-sat" class="value">N/A</span></li>
+                         <li class="list-group-item d-flex justify-content-between">Fix GPS: <span id="data-fix" class="value">N/A</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Heure GPS: <span id="data-time" class="value">N/A</span></li>
+                        <li class="list-group-item d-flex justify-content-between bg-light">Vitesse (calculée): <span id="data-speed" class="value">N/A</span> <span class="unit">km/h</span></li>
+                    </ul>
+                </div>
+
+                <!-- Données Environnementales -->
+                <div class="card data-card shadow-sm">
+                    <div class="card-header">
+                        🌡️ Environnement
+                    </div>
+                     <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">Température: <span id="data-temp" class="value">N/A</span> <span class="unit">°C</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Pression: <span id="data-pressure" class="value">N/A</span> <span class="unit">hPa</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Humidité: <span id="data-humidity" class="value">N/A</span> <span class="unit">%</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Altitude (Baro): <span id="data-alt-baro" class="value">N/A</span> <span class="unit">m</span></li>
+                    </ul>
+                </div>
+
+                 <!-- Données Qualité Air -->
+                <div class="card data-card shadow-sm">
+                    <div class="card-header">
+                        💨 Qualité de l'Air & Autres
+                    </div>
+                     <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">Qualité (indice): <span id="data-aqi-idx" class="value">N/A</span> (<span id="data-aqi-desc" class="value">?</span>)</li>
+                        <li class="list-group-item d-flex justify-content-between">TVOC: <span id="data-tvoc" class="value">N/A</span> <span class="unit">ppb</span></li>
+                        <li class="list-group-item d-flex justify-content-between">eCO2: <span id="data-eco2" class="value">N/A</span> <span class="unit">ppm</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Ozone (O3): <span id="data-ozone" class="value">N/A</span> <span class="unit">ppb</span></li>
+                        <li class="list-group-item d-flex justify-content-between">Indice UV: <span id="data-uv" class="value">N/A</span></li>
+                    </ul>
+                </div>
+
+            </div> <!-- Fin Colonne Droite -->
+        </div> <!-- Fin Row -->
+    </div> <!-- Fin Container -->
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- Bootstrap JS Bundle (includes Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Mettez à jour le lien si une version plus récente est disponible -->
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- ... autres scripts (Chart.js, Bootstrap) ... -->
+    <!-- Custom JS (DOIT être après Socket.IO) -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <!-- Leaflet Routing Machine JS -->
+<script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+</body>
+</html>
