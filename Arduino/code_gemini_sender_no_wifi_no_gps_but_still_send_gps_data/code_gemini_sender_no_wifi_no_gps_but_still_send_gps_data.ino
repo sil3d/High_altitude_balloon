@@ -1,369 +1,462 @@
-//////SENDER ///
-
+////// SENDER - Code Complet Corrigé (SparkFun BME/ENS + Debug GPS) ///
 
 #include <SPI.h>
 #include <LoRa.h>
-#include <TinyGPSPlus.h> // Remis pour essayer d'utiliser le GPS
+#include <TinyGPSPlus.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <DFRobot_ENS160.h>
-#include "DFRobot_BME280.h"
-#include "DFRobot_OzoneSensor.h"
+#include "SparkFunBME280.h"      // Bibliothèque SparkFun BME280
+#include "SparkFun_ENS160.h"     // Bibliothèque SparkFun ENS160
+#include "DFRobot_OzoneSensor.h" // Bibliothèque DFRobot Ozone
 
-// --- Définitions (inchangées) ---
-// Définitions pour l'écran OLED
+// --- Définitions ---
+// Écran OLED
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET    -1
 #define SCREEN_ADDRESS 0x3C
-// Définitions pour le module LoRa
+
+// Module LoRa (Vérifiez ces broches pour votre carte ESP32 spécifique !)
 #define LORA_SCK 5
 #define LORA_MISO 19
 #define LORA_MOSI 27
 #define LORA_CS 18
-#define LORA_RST 23
-#define LORA_IRQ 26
-// Définition pour la LED
-#define BLUE_LED 4
-// Définition pour le capteur UV
-#define UV_SENSOR_PIN 15
-// Définition pour la pression au niveau de la mer (pour l'altitude)
-#define SEA_LEVEL_PRESSURE 1015.0f
-// Définitions pour le capteur d'ozone
-#define COLLECT_NUMBER 20
-#define Ozone_IICAddress OZONE_ADDRESS_3
+#define LORA_RST 23   // Certaines cartes n'utilisent pas RST, vérifier
+#define LORA_IRQ 26   // Aussi appelé DIO0
 
-// --- Initialisation des objets (GPS réactivé) ---
-TinyGPSPlus gps; // GPS réactivé
+// LED Bleue (souvent intégrée)
+#define BLUE_LED 4    // Vérifiez si c'est la bonne broche pour votre LED
+
+// Capteur UV (Analogique)
+#define UV_SENSOR_PIN 15 // Vérifiez que c'est bien une broche ADC valide
+
+// GPS (Module NEO-6M)
+#define GPS_RX_PIN 34   // Broche RX de l'ESP32 (connectée au TX du GPS)
+#define GPS_TX_PIN 12   // Broche TX de l'ESP32 (connectée au RX du GPS) - Moins critique si on ne configure pas le GPS
+#define GPS_BAUD 9600   // Baud rate par défaut du NEO-6M
+
+// Capteur Ozone (DFRobot I2C)
+#define COLLECT_NUMBER 20         // Nombre d'échantillons pour la moyenne Ozone
+#define Ozone_IICAddress OZONE_ADDRESS_3 // Adresse I2C DFRobot (0x73) - Vérifiez si correcte
+
+// BME280 Altitude
+#define SEA_LEVEL_PRESSURE_HPA 1015.0f // Pression approx. au niveau de la mer en hPa (ajuster pour votre lieu)
+
+// --- Initialisation des objets ---
+TinyGPSPlus gps;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-DFRobot_ENS160_I2C ENS160(&Wire, 0x53);
-typedef DFRobot_BME280_IIC BME;
-BME bme(&Wire, 0x77);
-DFRobot_OzoneSensor Ozone;
+BME280 myBME;                  // Objet SparkFun BME280
+SparkFun_ENS160 myENS;         // Objet SparkFun ENS160
+DFRobot_OzoneSensor Ozone;     // Objet DFRobot Ozone
 
-// --- Variables (inchangées) ---
-float temperature;
-float humidity;
-float altitude;
-uint32_t pressure;
-uint8_t airQuality;
-uint16_t tvoc;
-uint16_t eCO2;
-int16_t ozoneConcentration;
-float uvIndex;
+// --- Variables Globales ---
+float temperature = NAN; // Not a Number par défaut
+float humidity = NAN;
+float altitude = NAN;
+float pressure = NAN;       // Pression en Pascals (Pa)
+uint8_t airQuality = 0;     // AQI (1-5)
+uint16_t tvoc = 0;          // TVOC (ppb)
+uint16_t eCO2 = 0;          // eCO2 (ppm)
+int16_t ozoneConcentration = -1; // Ozone (ppb), -1 si erreur
+float uvIndex = -1.0;       // UV Index, -1.0 si erreur
+
+// Indicateurs d'état d'initialisation
 bool loraInitialized = false;
 bool bmeInitialized = false;
 bool ensInitialized = false;
 bool ozoneInitialized = false;
 bool displayInitialized = false;
+bool gpsSerialStarted = false; // Pour savoir si Serial1 pour GPS est démarré
 
-// --- Fonctions utilitaires (inchangées) ---
-void printLastOperateStatus(BME::eStatus_t eStatus) {
-  // ... (code inchangé)
-    switch(eStatus) {
-    case BME::eStatusOK:    Serial.println("BME280: succès"); break;
-    case BME::eStatusErr:   Serial.println("BME280: Erreur inconnue"); break;
-    case BME::eStatusErrDeviceNotDetected: Serial.println("BME280: Non détecté"); break;
-    case BME::eStatusErrParameter:    Serial.println("BME280: Erreur de paramètre"); break;
-    default: Serial.println("BME280: Statut inconnu"); break;
-  }
-}
-
-// --- Setup (GPS réactivé) ---
+// --- Setup ---
 void setup() {
   Serial.begin(115200);
+  while (!Serial); // Attente que le port série soit prêt (utile sur certaines cartes)
   delay(1000);
-  Serial.println("Démarrage du programme (avec tentative GPS)...");
+  Serial.println("\n\n--- Initialisation du Sender ESP32 ---");
 
-  Serial1.begin(9600, SERIAL_8N1, 34, 12); // GPS réactivé (vérifier les broches!)
+  // Initialisation I2C (AVANT les capteurs I2C !)
+  Wire.begin(); // Utilise les broches I2C par défaut de l'ESP32 (GPIO 21=SDA, 22=SCL)
 
-  // Initialisation OLED (inchangée)
+  // Initialisation GPS sur Serial1
+  Serial.printf("Initialisation GPS sur Serial1 (RX:%d, TX:%d, Baud:%d)\n", GPS_RX_PIN, GPS_TX_PIN, GPS_BAUD);
+  Serial1.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  gpsSerialStarted = true; // On suppose que begin réussit, mais on vérifiera la réception des données
+
+  // Initialisation OLED
+  Serial.println("Initialisation OLED...");
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println("Échec de l'initialisation de l'OLED !");
+    Serial.println("-> ÉCHEC OLED ! Vérifiez câblage/adresse.");
   } else {
     displayInitialized = true;
-    display.clearDisplay(); display.setTextSize(1); display.setTextColor(SSD1306_WHITE);
-    display.setCursor(0, 0); display.println("Initialisation..."); display.display();
+    Serial.println("-> OLED OK");
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.println("Init OLED OK");
+    display.display();
+    delay(500);
   }
 
-  // Initialisation LoRa (inchangée)
-  pinMode(BLUE_LED, OUTPUT); digitalWrite(BLUE_LED, LOW);
+  // Initialisation LoRa
+  pinMode(BLUE_LED, OUTPUT);
+  digitalWrite(BLUE_LED, LOW);
+  Serial.println("Initialisation LoRa...");
+  Serial.printf("-> Pins: SCK=%d, MISO=%d, MOSI=%d, CS=%d, RST=%d, IRQ=%d\n", LORA_SCK, LORA_MISO, LORA_MOSI, LORA_CS, LORA_RST, LORA_IRQ);
   SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_CS);
   LoRa.setPins(LORA_CS, LORA_RST, LORA_IRQ);
-  Serial.println("Initialisation du LoRa...");
-  if (!LoRa.begin(868E6)) {
-    Serial.println("Échec LoRa!");
-    if (displayInitialized) { display.clearDisplay(); display.setCursor(0, 0); display.println("LoRa: échec!"); display.display(); }
+  if (!LoRa.begin(868E6)) { // Fréquence pour l'Europe
+    Serial.println("-> ÉCHEC LoRa ! Vérifiez module/broches.");
+    if (displayInitialized) { display.setCursor(0, 10); display.println("Init LoRa ECHEC"); display.display(); }
   } else {
     loraInitialized = true;
-    LoRa.setSpreadingFactor(7); LoRa.setTxPower(14, PA_OUTPUT_PA_BOOST_PIN);
-    Serial.println("LoRa: succès");
+    LoRa.setSpreadingFactor(7); // SF7 pour test rapide, augmenter pour portée (ex: 10, 11, 12)
+    LoRa.setTxPower(14);        // Puissance d'émission (max souvent 20, dépend de la région/matériel)
+    Serial.println("-> LoRa OK (868 MHz)");
+    if (displayInitialized) { display.setCursor(0, 10); display.println("Init LoRa OK"); display.display(); }
   }
+  delay(500);
 
-  // Initialisation BME280 (inchangée)
-  Serial.println("Initialisation du BME280...");
-  bme.reset(); delay(100);
-  int bmeRetries = 0;
-  while(bme.begin() != BME::eStatusOK && bmeRetries < 3) { /*...*/ delay(1000); bmeRetries++; }
-  if (bmeRetries >= 3) { Serial.println("BME280: échec init"); printLastOperateStatus(bme.lastOperateStatus); }
-  else { bmeInitialized = true; Serial.println("BME280: succès"); }
 
-  // Initialisation ENS160 (inchangée)
-  Serial.println("Initialisation de l'ENS160...");
-  int ensRetries = 0;
-  while(NO_ERR != ENS160.begin() && ensRetries < 3) { /*...*/ delay(1000); ensRetries++; }
-  if (ensRetries >= 3) { Serial.println("ENS160: échec init"); }
-  else { ensInitialized = true; ENS160.setPWRMode(ENS160_STANDARD_MODE); Serial.println("ENS160: succès"); }
+  // Initialisation BME280 (SparkFun)
+  Serial.println("Initialisation BME280 (SparkFun)...");
+  // myBME.setI2CAddress(0x76); // Décommentez et changez si adresse = 0x76
+  if (!myBME.beginI2C(Wire)) { // Passer l'objet Wire explicitement
+    Serial.println("-> ÉCHEC BME280 ! Vérifiez câblage/adresse (0x77 par défaut).");
+    if (displayInitialized) { display.setCursor(0, 20); display.println("Init BME280 ECHEC"); display.display(); }
+  } else {
+    bmeInitialized = true;
+    Serial.println("-> BME280 OK");
+    if (displayInitialized) { display.setCursor(0, 20); display.println("Init BME280 OK"); display.display(); }
+  }
+  delay(500);
 
-  // Initialisation Ozone (inchangée)
-  Serial.println("Initialisation du capteur d'ozone...");
+  // Initialisation ENS160 (SparkFun)
+  Serial.println("Initialisation ENS160 (SparkFun)...");
+  // myENS.setI2CAddress(0x52); // Décommentez et changez si adresse = 0x52
+  if (!myENS.begin(Wire)) { // Passer l'objet Wire explicitement
+    Serial.println("-> ÉCHEC ENS160 ! Vérifiez câblage/adresse (0x53 par défaut).");
+     if (displayInitialized) { display.setCursor(0, 30); display.println("Init ENS160 ECHEC"); display.display(); }
+  } else {
+    Serial.println("-> ENS160 Trouvé. Configuration...");
+    if (!myENS.setOperatingMode(SFE_ENS160_STANDARD)) {
+        Serial.println("--> Échec configuration mode standard ENS160.");
+        if (displayInitialized) { display.setCursor(0, 30); display.println("Init ENS160 CONF ERR"); display.display(); }
+    } else {
+        ensInitialized = true;
+        Serial.println("-> ENS160 OK (Mode Standard)");
+        if (displayInitialized) { display.setCursor(0, 30); display.println("Init ENS160 OK"); display.display(); }
+    }
+  }
+  delay(500);
+
+  // Initialisation Ozone (DFRobot)
+  Serial.println("Initialisation Ozone (DFRobot)...");
   int ozoneRetries = 0;
-  while(!Ozone.begin(Ozone_IICAddress) && ozoneRetries < 3) { /*...*/ delay(1000); ozoneRetries++; }
-  if (ozoneRetries >= 3) { Serial.println("Ozone: échec init"); }
-  else { ozoneInitialized = true; Ozone.setModes(MEASURE_MODE_PASSIVE); Serial.println("Ozone: succès"); }
-
-  // Initialisation UV (inchangée)
-  analogReadResolution(12); pinMode(UV_SENSOR_PIN, INPUT);
-
-  Serial.println("Initialisation terminée, début des mesures.");
-  if (displayInitialized) {
-    display.clearDisplay(); display.setCursor(0, 0); display.println("Système prêt"); display.display();
+  while (!Ozone.begin(Ozone_IICAddress) && ozoneRetries < 3) {
+      Serial.printf("-> Tentative Ozone %d/3...\n", ozoneRetries + 1);
+      delay(1000);
+      ozoneRetries++;
   }
-  delay(1000);
-  Serial.println("Entrée dans loop()");
+  if (ozoneRetries >= 3) {
+      Serial.println("-> ÉCHEC Ozone ! Vérifiez câblage/adresse (0x73 par défaut).");
+      if (displayInitialized) { display.setCursor(0, 40); display.println("Init Ozone ECHEC"); display.display(); }
+  } else {
+      ozoneInitialized = true;
+      Ozone.setModes(MEASURE_MODE_PASSIVE); // Mode passif par défaut
+      Serial.println("-> Ozone OK");
+      if (displayInitialized) { display.setCursor(0, 40); display.println("Init Ozone OK"); display.display(); }
+  }
+  delay(500);
+
+  // Initialisation UV (Analogique)
+  Serial.println("Configuration Capteur UV (Analogique)...");
+  analogReadResolution(12); // ESP32 ADC est 12 bits (0-4095)
+  pinMode(UV_SENSOR_PIN, INPUT);
+  Serial.printf("-> UV sur Pin %d (ADC 12bit)\n", UV_SENSOR_PIN);
+  if (displayInitialized) { display.setCursor(0, 50); display.println("Init UV OK"); display.display(); }
+  delay(1000); // Pause avant de démarrer la boucle
+
+  Serial.println("\n--- Initialisation terminée ---");
+  if (displayInitialized) {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("Systeme PRET");
+    display.display();
+    delay(1500);
+  }
+  Serial.println("Entrée dans loop()...");
 }
 
-// --- Loop (Gestion lecture GPS réactivée) ---
+// --- Boucle Principale ---
 void loop() {
-  Serial.println("--- Début Loop ---");
+  Serial.println("\n--- DEBUT Boucle ---");
+  unsigned long startLoopTime = millis();
 
-  // Tenter de lire les données GPS en continu (non bloquant)
-  while (Serial1.available() > 0) {
-    char c = Serial1.read();
-    gps.encode(c);
-    // Serial.print(c); // Décommenter pour voir les données brutes NMEA
+  // 1. Lecture GPS
+  Serial.print("Lecture GPS... ");
+  bool receivedGpsDataThisLoop = false;
+  unsigned long gpsStartTime = millis();
+  if (gpsSerialStarted) {
+    while (Serial1.available() > 0 && millis() - gpsStartTime < 100) { // Lire pendant max 100ms pour éviter blocage
+      char c = Serial1.read();
+      // --- DEBUG GPS BRUT: Décommentez la ligne suivante pour voir ce qui arrive du GPS ---
+      // Serial.print(c);
+      // --------------------------------------------------------------------------------
+      if (gps.encode(c)) {
+        receivedGpsDataThisLoop = true; // TinyGPS a traité un caractère
+      }
+    }
   }
-  // Donner un peu de temps au GPS pour traiter les caractères reçus
-  // gps.encode() traite caractère par caractère, la validité est mise à jour à l'intérieur.
+  Serial.printf("Terminé (%lu ms). ", millis() - gpsStartTime);
+  if (receivedGpsDataThisLoop) Serial.println("Données GPS reçues."); else Serial.println("Aucune nouvelle donnée GPS.");
 
-  // Lire les données des capteurs environnementaux
+  // Affichage Debug GPS (même si pas de fix)
+   // CORRIGÉ: Utilisation de passedChecksum() au lieu de sentencesProcessed()
+   Serial.printf("  GPS Debug: Chars=%lu SentencesOK=%lu CSFail=%lu Fix=%d Sats=%d Age=%lums\n",
+                gps.charsProcessed(),       // Total caractères traités par TinyGPS
+                gps.passedChecksum(),       // <<< CORRIGÉ ICI: Total phrases NMEA avec checksum OK
+                gps.failedChecksum(),       // Nombre de checksums échoués (indique bruit/problème)
+                gps.location.isValid(),     // Fix valide ?
+                gps.satellites.value(),     // Nb satellites (si valide)
+                gps.location.age());        // Âge de la position (ms)
+
+
+  // 2. Lecture Capteurs Environnementaux
   readEnvironmentalSensors();
 
-  // Envoyer les données via LoRa (même si le GPS n'a pas de fix)
+  // 3. Envoi LoRa
   if (loraInitialized) {
     sendDataOverLoRa();
   } else {
-      Serial.println("LoRa non initialisé, pas d'envoi.");
+    Serial.println("LoRa non initialisé, pas d'envoi.");
   }
 
-  // Afficher les données sur l'écran OLED
+  // 4. Mise à jour Affichage OLED
   if (displayInitialized) {
     updateDisplay();
   } else {
-      Serial.println("OLED non initialisé, pas d'affichage.");
+    Serial.println("OLED non initialisé, pas d'affichage.");
   }
 
-  Serial.println("--- Fin Loop, attente... ---");
-  delay(5000); // Intervalle d'envoi
+  unsigned long endLoopTime = millis();
+  Serial.printf("--- FIN Boucle (Durée: %lu ms) ---\n", endLoopTime - startLoopTime);
+
+  // 5. Attente avant prochaine boucle
+  delay(5000); // Intervalle total de ~5 secondes
 }
 
-// --- readEnvironmentalSensors (inchangée) ---
+// --- Fonction de Lecture des Capteurs ---
 void readEnvironmentalSensors() {
-  Serial.println("Lecture des capteurs...");
+  Serial.println("Lecture des capteurs environnementaux:");
 
-  // BME280
+  // BME280 (SparkFun)
   if (bmeInitialized) {
-    temperature = bme.getTemperature();
-    pressure = bme.getPressure();
-    altitude = bme.calAltitude(SEA_LEVEL_PRESSURE, pressure);
-    humidity = bme.getHumidity();
-    Serial.printf("BME: T=%.1fC, P=%.1fhPa, H=%.1f%%, Alt=%.1fm\n", temperature, pressure/100.0, humidity, altitude);
+    temperature = myBME.readTempC();
+    humidity = myBME.readFloatHumidity();
+    pressure = myBME.readFloatPressure(); // Pression en Pascals (Pa)
+
+    // Calcul manuel de l'altitude si pression valide
+    if (!isnan(pressure) && pressure > 0) {
+       altitude = 44330.0 * (1.0 - pow(pressure / (SEA_LEVEL_PRESSURE_HPA * 100.0), 0.1903));
+    } else {
+       altitude = NAN; // Pression invalide -> Altitude invalide
+    }
+
+    Serial.printf("  BME280: T=%.1f C, H=%.1f %%, P=%.0f Pa (%.1f hPa), Alt=%.1f m\n",
+                  temperature, humidity, pressure, pressure / 100.0, altitude);
   } else {
-    Serial.println("BME280 non initialisé.");
-    temperature = NAN; pressure = 0; altitude = NAN; humidity = NAN; // Valeurs invalides
+    Serial.println("  BME280: Non initialisé.");
+    // Les variables gardent leur dernière valeur ou NAN si jamais initialisées
   }
 
-  // ENS160 (nécessite T/H du BME)
-  if (ensInitialized && bmeInitialized) {
-    ENS160.setTempAndHum(temperature, humidity);
-    airQuality = ENS160.getAQI();
-    tvoc = ENS160.getTVOC();
-    eCO2 = ENS160.getECO2();
-    Serial.printf("ENS: AQI=%d, TVOC=%dppb, eCO2=%dppm\n", airQuality, tvoc, eCO2);
+  // ENS160 (SparkFun) - La bibliothèque SparkFun tente une compensation auto avec BME280 sur le bus I2C.
+  if (ensInitialized) {
+     // CORRIGÉ: La ligne myENS.setEnvironmentData(...) a été supprimée car elle n'existe pas dans cette bibliothèque.
+     // La compensation T/H est normalement gérée automatiquement par la bibliothèque SparkFun ENS160
+     // si un BME280 SparkFun est détecté sur le même bus I2C.
+
+    if (myENS.checkDataStatus()) { // Vérifier si de nouvelles données sont prêtes
+        airQuality = myENS.getAQI(); // Index Qualité Air (1-5)
+        tvoc = myENS.getTVOC();      // Composés Organiques Volatils Totaux (ppb)
+        eCO2 = myENS.getECO2();      // Concentration CO2 équivalente (ppm)
+        Serial.printf("  ENS160: AQI=%d, TVOC=%d ppb, eCO2=%d ppm\n", airQuality, tvoc, eCO2);
+    } else {
+        Serial.println("  ENS160: Pas de nouvelles données prêtes.");
+        // Garder les anciennes valeurs ? Ou réinitialiser ? Pour l'instant on garde.
+    }
   } else {
-    Serial.println("ENS160 ou BME non initialisé.");
-    airQuality = 0; tvoc = 0; eCO2 = 0; // Valeurs par défaut/invalides
+    Serial.println("  ENS160: Non initialisé.");
   }
 
-  // Ozone
+  // Ozone (DFRobot)
   if (ozoneInitialized) {
+    // La lecture peut prendre un peu de temps à cause de COLLECT_NUMBER
     ozoneConcentration = Ozone.readOzoneData(COLLECT_NUMBER);
-     Serial.printf("Ozone: %d ppb\n", ozoneConcentration);
+    if (ozoneConcentration >= 0) { // La lib renvoie -1 en cas d'erreur
+       Serial.printf("  Ozone: %d ppb\n", ozoneConcentration);
+    } else {
+       Serial.println("  Ozone: Erreur lecture (-1)");
+       ozoneConcentration = -1; // Assurer valeur d'erreur
+    }
   } else {
-    Serial.println("Ozone non initialisé.");
-    ozoneConcentration = -1; // Valeur invalide
+    Serial.println("  Ozone: Non initialisé.");
   }
 
-  // UV
+  // UV (Analogique)
   int rawUV = analogRead(UV_SENSOR_PIN);
-  if (rawUV > 0) { // Simple check
-    float voltage = rawUV * (3.3 / 4095.0);
-    uvIndex = voltage / 0.1;
-    uvIndex = constrain(uvIndex, 0.0, 11.0); // Limiter
-     Serial.printf("UV: %.1f\n", uvIndex);
+  // Vérification simple, pourrait être améliorée (ex: plage attendue)
+  if (rawUV >= 0 && rawUV <= 4095) { // Valeur ADC valide pour 12 bits
+    float voltage = rawUV * (3.3 / 4095.0); // Conversion en tension (suppose Vref=3.3V)
+    // La conversion tension -> UV Index dépend *fortement* du capteur spécifique.
+    // Ceci est une estimation générique, À AJUSTER pour votre capteur !
+    uvIndex = voltage / 0.1; // Exemple: 100mV par unité d'index UV
+    uvIndex = constrain(uvIndex, 0.0, 15.0); // Limiter à une plage raisonnable
+    Serial.printf("  UV: Index=%.1f (Raw=%d, Volt=%.2fV)\n", uvIndex, rawUV, voltage);
   } else {
     uvIndex = -1.0; // Valeur invalide
-    Serial.println("UV: Lecture invalide");
+    Serial.printf("  UV: Lecture invalide (Raw=%d)\n", rawUV);
   }
 }
 
-// --- sendDataOverLoRa (MODIFIÉE pour gérer GPS optionnel) ---
+// --- Fonction d'Envoi LoRa ---
 void sendDataOverLoRa() {
-  Serial.print("Préparation envoi LoRa... ");
-  digitalWrite(BLUE_LED, HIGH);
+  Serial.print("Envoi LoRa... ");
+  digitalWrite(BLUE_LED, HIGH); // Allumer LED pendant transmission
 
   LoRa.beginPacket();
 
-  // 1. Section GPS : Toujours présente, contenu variable
-  LoRa.print("GPS,"); // Marqueur toujours présent
-  // Vérifier si le fix GPS est valide ET si les données sont récentes
-  if (gps.location.isValid() && gps.location.isUpdated() && gps.date.isValid() && gps.time.isValid() && gps.date.age() < 2000 && gps.time.age() < 2000) {
-    Serial.print("GPS Valide - ");
-    LoRa.print(gps.location.lat(), 6); LoRa.print(",");
-    LoRa.print(gps.location.lng(), 6); LoRa.print(",");
-    LoRa.print(gps.altitude.meters()); LoRa.print(",");
-    LoRa.print(gps.satellites.value()); LoRa.print(",");
-    // Format Heure (s'assurer que l'heure est valide avant)
-    if(gps.time.isValid()){
-        LoRa.printf("%02d:%02d:%02d", gps.time.hour(), gps.time.minute(), gps.time.second());
-    } else {
-        LoRa.print("NO_TIME"); // Si heure invalide
-    }
+  // Format: GPS,val1,val2,...|ENV,val1,val2,...|AIR,val1,val2,...|OZ,val1|UV,val1
+  // Utilisation de marqueurs et séparateurs '|'
+
+  // 1. Section GPS
+  LoRa.print("GPS,");
+  bool gpsValid = gps.location.isValid() && gps.location.isUpdated() && gps.location.age() < 5000; // Position valide et récente (<5s)
+  bool timeValid = gps.time.isValid() && gps.time.age() < 5000; // Heure valide et récente
+  bool dateValid = gps.date.isValid() && gps.date.age() < 5000; // Date valide et récente
+
+  if (gpsValid) {
+    Serial.print("[GPS OK] ");
+    LoRa.print(gps.location.lat(), 6); LoRa.print(","); // Latitude
+    LoRa.print(gps.location.lng(), 6); LoRa.print(","); // Longitude
+    LoRa.print(gps.altitude.meters()); LoRa.print(","); // Altitude (GPS)
+    LoRa.print(gps.satellites.value()); LoRa.print(","); // Nb Satellites
+    if (timeValid) { // Heure
+       LoRa.printf("%02d:%02d:%02d,", gps.time.hour(), gps.time.minute(), gps.time.second());
+    } else { LoRa.print("NO_TIME,"); }
+    if (dateValid) { // Date
+       LoRa.printf("%d/%d/%d", gps.date.day(), gps.date.month(), gps.date.year());
+    } else { LoRa.print("NO_DATE"); }
   } else {
-    Serial.print("GPS Invalide/Pas de Fix - ");
-    LoRa.print("NO_FIX"); // Valeur spéciale si pas de fix valide/récent
+    Serial.print("[GPS NO_FIX] ");
+    LoRa.print("NO_FIX"); // Pas de données GPS valides
   }
 
-  // 2. Section ENV : Toujours présente après GPS
-  LoRa.print("|ENV,"); // Séparateur et marqueur
-  if (bmeInitialized) {
-    LoRa.print(temperature); LoRa.print(",");
-    LoRa.print(pressure); LoRa.print(",");
-    LoRa.print(humidity); LoRa.print(",");
-    LoRa.print(altitude);
+  // 2. Section Environnement (BME280)
+  LoRa.print("|ENV,");
+  if (bmeInitialized && !isnan(temperature) && !isnan(humidity) && !isnan(pressure) && !isnan(altitude)) {
+    LoRa.print(temperature, 1); LoRa.print(",");  // Index 0: Température
+    // --- LIGNES INVERSÉES POUR CORRECTION ---
+    LoRa.print(pressure, 0); LoRa.print(",");   // Index 1: Pression (Pa) <-- ENVOYER PRESSION EN 2ème
+    LoRa.print(humidity, 1); LoRa.print(",");   // Index 2: Humidité (%) <-- ENVOYER HUMIDITÉ EN 3ème
+    // --------------------------------------
+    LoRa.print(altitude, 1);                    // Index 3: Altitude
   } else {
-    LoRa.print("ERR,ERR,ERR,ERR"); // Indicateur d'erreur BME
+    LoRa.print("ERR,ERR,ERR,ERR");
   }
 
-  // 3. Section AIR : Toujours présente après ENV
+
+  // 3. Section Qualité Air (ENS160)
   LoRa.print("|AIR,");
   if (ensInitialized) {
     LoRa.print(airQuality); LoRa.print(",");
     LoRa.print(tvoc); LoRa.print(",");
     LoRa.print(eCO2);
   } else {
-    LoRa.print("ERR,ERR,ERR"); // Indicateur d'erreur ENS
+    LoRa.print("ERR,ERR,ERR"); // Marqueur d'erreur ENS
   }
 
-  // 4. Section OZ : Toujours présente après AIR
+  // 4. Section Ozone (DFRobot)
   LoRa.print("|OZ,");
-  if (ozoneInitialized) {
+  if (ozoneInitialized && ozoneConcentration >= 0) {
     LoRa.print(ozoneConcentration);
   } else {
-    LoRa.print("ERR"); // Indicateur d'erreur Ozone
+    LoRa.print("ERR"); // Marqueur d'erreur Ozone
   }
 
-  // 5. Section UV : Toujours présente après OZ
+  // 5. Section UV (Analogique)
   LoRa.print("|UV,");
-  // Envoyer -1.0 si la lecture était invalide, sinon la valeur
-  LoRa.print(uvIndex);
+  if (uvIndex >= 0.0) {
+    LoRa.print(uvIndex, 1);
+  } else {
+    LoRa.print("ERR"); // Marqueur d'erreur UV
+  }
 
-  LoRa.endPacket();
+  // Fin du paquet LoRa
+  int result = LoRa.endPacket(); // endPacket peut être bloquant
 
-  digitalWrite(BLUE_LED, LOW);
-  Serial.println("Paquet LoRa envoyé.");
+  digitalWrite(BLUE_LED, LOW); // Éteindre LED après transmission
+
+  if (result) {
+    Serial.println("Paquet LoRa envoyé avec succès.");
+  } else {
+    Serial.println("Échec de l'envoi du paquet LoRa !");
+  }
 }
 
-// --- updateDisplay (MODIFIÉE pour afficher état GPS) ---
+// --- Fonction de Mise à Jour de l'Affichage OLED ---
 void updateDisplay() {
-  //Serial.println("Mise à jour affichage..."); // Peut être verbeux
+  //Serial.println("Mise à jour affichage OLED..."); // Optionnel, peut être verbeux
   display.clearDisplay();
   display.setCursor(0, 0);
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
 
-  // Afficher état GPS en premier
-  display.print("GPS: ");
-  if (gps.location.isValid() && gps.location.isUpdated()) {
-      display.print(gps.satellites.value());
-      display.print(" SAT");
-      if(gps.hdop.isValid()) { // Afficher précision si dispo
-        display.printf(" HDOP:%.1f", gps.hdop.hdop()/100.0);
-      }
-      display.println(""); // Nouvelle ligne
-      // Afficher Lat/Lon sur la ligne suivante
-      display.printf("L:%.4f Lo:%.4f\n", gps.location.lat(), gps.location.lng());
+  // Ligne 1 & 2: Statut GPS
+  bool gpsFix = gps.location.isValid() && gps.location.age() < 5000;
+  display.print("GPS:");
+  if (gps.satellites.isValid()) {
+     display.printf(" Sat:%d", gps.satellites.value());
   } else {
-      display.print("Cherche (Sat:");
-      display.print(gps.satellites.value()); // Afficher sats même sans fix
-      display.println(")");
-      display.println("L:---.-- Lo:---.--"); // Placeholder
+     display.print(" Sat:--");
+  }
+  display.printf(" Fix:%s\n", gpsFix ? "OK" : "NO"); // Nouvelle ligne
+  if (gpsFix) {
+      display.printf(" L:%.4f Lo:%.4f\n", gps.location.lat(), gps.location.lng());
+  } else {
+      display.println(" L:---.---- Lo:---.----");
   }
 
-  // Afficher autres capteurs
-  // Ligne 3: Temp & Humidité
+  // Ligne 3: Température & Humidité
   display.print("T:");
-  if (bmeInitialized) display.print(temperature, 1); else display.print("ERR");
-  display.print("C H:");
-  if (bmeInitialized) display.print(humidity, 0); else display.print("ERR");
-  display.println("%");
+  if (bmeInitialized && !isnan(temperature)) display.printf("%.1fC", temperature); else display.print("ERR");
+  display.print(" H:");
+  if (bmeInitialized && !isnan(humidity)) display.printf("%.0f%%", humidity); else display.print("ERR");
+  display.println(); // NL
 
-  // Ligne 4: Altitude & Pression
-  display.print("Alt:");
-  if (bmeInitialized) display.print(altitude, 0); else display.print("ERR");
-  display.print("m P:");
-  if (bmeInitialized) display.print(pressure/100.0,0); else display.print("ERR"); // Pression en hPa sans décimale
-  //display.println("hPa"); // Prend trop de place
+  // Ligne 4: Pression & Altitude
+  display.print("P:");
+  if (bmeInitialized && !isnan(pressure)) display.printf("%.0fhPa", pressure / 100.0); else display.print("ERR");
+  display.print(" A:");
+  if (bmeInitialized && !isnan(altitude)) display.printf("%.0fm", altitude); else display.print("ERR");
+  display.println(); // NL
 
   // Ligne 5: AQI & CO2
-  display.print(" AQI:");
+  display.print("AQI:");
+  
   if (ensInitialized) display.print(airQuality); else display.print("ERR");
   display.print(" CO2:");
   if (ensInitialized) display.print(eCO2); else display.print("ERR");
+  //display.println("ppm"); // Manque de place
 
   // Ligne 6: Ozone & UV
   display.print(" O3:");
-  if (ozoneInitialized) display.print(ozoneConcentration); else display.print("ERR");
+  if (ozoneInitialized && ozoneConcentration >=0) display.print(ozoneConcentration); else display.print("ERR");
   display.print(" UV:");
-  if (uvIndex >= 0) display.print(uvIndex, 1); else display.print("ERR");
+  if (uvIndex >= 0.0) display.printf("%.1f", uvIndex); else display.print("ERR");
 
-   // --- Affichage GPS ---
-  if (gps.location.isValid() && gps.satellites.isValid()) {
-    display.printf("Sat: %d\n", gps.satellites.value());
-  } else {
-    display.println("Sat: --");
-  }
-
-// État du fix GPS
-if (gps.location.isValid() && gps.location.age() < 2000) {
-  display.println("Fix: OK");
-
-  // Affichage latitude et longitude
-  display.print("Lat: ");
-  display.println(gps.location.lat(), 6); // 6 chiffres après la virgule pour plus de précision
-  display.print("Lon: ");
-  display.println(gps.location.lng(), 6);
-} else {
-  display.println("Fix: --");
-
-  // Affichage vide ou placeholder pour éviter d'afficher de fausses valeurs
-  display.println("Lat: --");
-  display.println("Lon: --");
-}
-
+  // Afficher sur l'écran
   display.display();
-  //Serial.println("Affichage mis à jour.");
 }
-
-//////SENDER ///

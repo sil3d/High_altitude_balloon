@@ -169,8 +169,6 @@ def parse_serial_data(compact_line):
 
     #print(f"PY_DEBUG Parse Result: {data}") # Debug
     return data
-
-# *** MODIFICATION MAJEURE DANS serial_reader_task ***
 def serial_reader_task():
     """Lit le port série ligne par ligne, identifie les lignes pertinentes,
        extrait les données et le RSSI, puis parse et émet."""
@@ -184,129 +182,152 @@ def serial_reader_task():
         try:
             # --- Phase 1: Connexion/Reconnexion ---
             if ser is None or not ser.is_open:
-                # ... (Logique de connexion identique à avant) ...
                 if ser:
                     try: ser.close()
                     except Exception: pass
+                print(f"Tentative de connexion à {SERIAL_PORT}@{BAUD_RATE}...") # DEBUG
                 try:
+                    # Ajout d'un timeout un peu plus long pour la connexion initiale peut aider
                     ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-                    print(f"Connecté à {SERIAL_PORT}")
+                    print(f"Connecté avec succès à {SERIAL_PORT}") # DEBUG
                     with data_lock: latest_data['error'] = None
                     socketio.emit('serial_status', {'status': 'connected', 'port': SERIAL_PORT, 'message': None})
-                    time.sleep(0.5)
-                    ser.reset_input_buffer()
-                except (serial.SerialException, PermissionError) as e:
+                    time.sleep(0.5) # Attendre un peu après la connexion
+                    ser.reset_input_buffer() # Effacer ancien buffer
+                    print("Buffer d'entrée réinitialisé.") # DEBUG
+                except (serial.SerialException, PermissionError, FileNotFoundError) as e: # Ajout FileNotFoundError
                     serial_error_message = f"Échec connexion {SERIAL_PORT}: {e}"
+                    print(f"ERREUR: {serial_error_message}") # DEBUG PLUS VISIBLE
                     ser = None
                     with data_lock:
                          if latest_data.get('error') != serial_error_message:
                              latest_data['error'] = serial_error_message
-                             socketio.emit('update_data', latest_data)
+                             socketio.emit('update_data', latest_data) # S'assurer que l'erreur est émise
                     socketio.emit('serial_status', {'status': 'error', 'port': SERIAL_PORT, 'message': str(e)})
-                    stop_thread.wait(5)
-                    continue
+                    stop_thread.wait(5) # Attendre avant de réessayer
+                    continue # Revenir au début de la boucle while pour réessayer
 
             # --- Phase 2: Lecture Ligne par Ligne ---
             if ser and ser.is_open:
+                # Vérifier s'il y a des données en attente
                 if ser.in_waiting > 0:
                     line = ser.readline()
+                    # print(f"PY_DBG_BYTES: {line}") # Debug: voir les bytes bruts
                     try:
                         raw_line = line.decode('utf-8', errors='ignore').strip()
-                        if raw_line:
-                            #print(f"PY_READ_LINE: [{raw_line}]") # Debug ligne lue
 
-                            # *** TEST 1: Est-ce la ligne de données brutes ? ***
-                            data_prefix = "Données brutes: "
+                        # !!! DEBUG CRUCIAL: Afficher CHAQUE ligne lue !!!
+                        if raw_line: # Ne pas afficher les lignes vides
+                            print(f"PY_READ_LINE: [{raw_line}]")
+
+                        if raw_line:
+                            # TEST 1: Est-ce la ligne de données brutes ?
+                            data_prefix = "Donnees brutes: "
                             if raw_line.startswith(data_prefix):
                                 compact_data_string = raw_line[len(data_prefix):]
-                                print(f"PY_FOUND_DATA: Extracted [{compact_data_string}]") # Debug
+                                print(f"PY_FOUND_DATA: Extracted [{compact_data_string}]") # DEBUG
 
-                                # Utiliser le parser existant pour la chaîne compacte
                                 parsed_data = parse_serial_data(compact_data_string)
 
-                                # Ajouter le dernier RSSI connu (lu sur une ligne précédente)
                                 if last_rssi_value is not None:
                                     parsed_data['rssi'] = last_rssi_value
-                                    # Optionnel: Réinitialiser last_rssi_value si on ne veut l'utiliser qu'une fois par bloc de données ?
-                                    # last_rssi_value = None # Décommentez si nécessaire
+                                    print(f"PY_APPLY_RSSI: Ajout RSSI={last_rssi_value}") # DEBUG
+                                    # last_rssi_value = None # Décommentez si RSSI doit être consommé
 
-                                # Calculer la vitesse
                                 speed = calculate_speed_kmh(
                                     parsed_data.get('latitude'), parsed_data.get('longitude'),
                                     parsed_data.get('timestamp')
                                 )
                                 parsed_data['speed_kmh'] = speed
 
-                                # Mettre à jour l'état global et émettre
                                 with data_lock:
                                     latest_data = parsed_data.copy()
                                     data_history.append(latest_data)
                                     if len(data_history) > MAX_HISTORY: data_history.pop(0)
-                                    if latest_data['error'] is not None and any(v is not None for k, v in latest_data.items() if k not in ['timestamp', 'error', 'speed_kmh', 'rssi', 'latitude', 'longitude', 'altitude_gps', 'satellites']):
-                                         latest_data['error'] = None # Efface erreur si on a des données de capteur
+                                    # Effacer erreur SEULEMENT si on a des données valides
+                                    if any(v is not None for k,v in parsed_data.items() if k not in ['timestamp', 'error', 'rssi', 'speed_kmh', 'latitude', 'longitude', 'altitude_gps', 'satellites']):
+                                        if latest_data['error'] is not None:
+                                            print("PY_CLEAR_ERROR: Erreur effacée car données reçues.") # DEBUG
+                                            latest_data['error'] = None
 
+                                print(f"PY_EMIT_UPDATE: {latest_data}") # DEBUG avant émission
                                 socketio.emit('update_data', latest_data)
+                                # Émettre le statut 'receiving' SEULEMENT si on reçoit vraiment
                                 socketio.emit('serial_status', {'status': 'receiving', 'port': SERIAL_PORT, 'message': None})
-                                # print(f"PY_EMIT: Emitting {latest_data}") # Debug détaillé
 
-                            # *** TEST 2: Est-ce la ligne RSSI ? ***
+
+                            # TEST 2: Est-ce la ligne RSSI ?
+                            # Format attendu: "RSSI: -77 | SNR: 9.75"
                             elif raw_line.startswith("RSSI:"):
                                 try:
-                                    rssi_part = raw_line.split('|')[0] # Prend "RSSI: -33"
-                                    rssi_value_str = rssi_part.split(':')[1].strip() # Prend "-33"
+                                    # Isoler la partie RSSI avant le |
+                                    rssi_part = raw_line.split('|')[0] # Prend "RSSI: -77 "
+                                    rssi_value_str = rssi_part.split(':')[1].strip() # Prend "-77"
                                     last_rssi_value = int(rssi_value_str) # Stocke la valeur
-                                    #print(f"PY_FOUND_RSSI: Stored {last_rssi_value}") # Debug
+                                    print(f"PY_FOUND_RSSI: Stored {last_rssi_value}") # DEBUG
                                 except (IndexError, ValueError) as e_rssi:
                                     print(f"PY_WARN: Impossible de parser RSSI: {raw_line} - {e_rssi}")
-                                    # Ne pas réinitialiser last_rssi_value ici, garder l'ancien si le nouveau est invalide
 
-                            # Ignorer les autres lignes (--- DONNÉES REÇUES ---, Température: ..., etc.)
+                            # Ignorer les autres lignes (commentaires, etc.)
                             # else:
-                            #    print(f"PY_IGNORE_LINE: [{raw_line}]") # Debug si besoin
+                            #    # Déjà affiché par PY_READ_LINE
+                            #    pass
 
-                    # ... (Gestion erreurs SerialException, UnicodeDecodeError, Exception générique) ...
+
+                    except UnicodeDecodeError as ude:
+                        print(f"ERREUR DECODAGE: {ude} pour bytes: {line}")
                     except serial.SerialException as e:
+                        # ... (gestion erreur identique) ...
                         serial_error_message = f"Erreur série pendant lecture: {e}"
-                        print(serial_error_message)
+                        print(f"ERREUR LECTURE: {serial_error_message}")
                         if ser:
-                            try: ser.close() 
+                            try: ser.close()
                             except Exception: pass
                         ser = None
                         with data_lock: latest_data['error'] = serial_error_message
                         socketio.emit('serial_status', {'status': 'error', 'port': SERIAL_PORT, 'message': str(e)})
                         socketio.emit('update_data', latest_data)
                         stop_thread.wait(2)
-                    except UnicodeDecodeError:
-                        print(f"Erreur décodage ligne série: {line}")
                     except Exception as e_proc:
                          print(f"Erreur traitement ligne '{raw_line}': {e_proc}")
+                         # Mettre à jour l'erreur dans l'état global peut être utile
                          with data_lock:
-                             error_state = latest_data.copy(); error_state['error'] = f"Erreur traitement: {e_proc}"; error_state['timestamp'] = time.time()
+                             error_state = latest_data.copy(); error_state['error'] = f"Erreur proc: {e_proc}"; error_state['timestamp'] = time.time()
                              latest_data = error_state
                          socketio.emit('update_data', latest_data)
+
                 else:
-                    stop_thread.wait(0.1) # Pas de données, pause
+                    # Pas de données en attente, petite pause pour ne pas surcharger le CPU
+                    stop_thread.wait(0.05) # Pause plus courte pour réactivité
             else:
-                 print("Warning: Port série non disponible."); stop_thread.wait(1)
+                 # Si on arrive ici, c'est que la connexion a échoué plus haut et ser est None
+                 # Le message d'erreur a déjà été affiché. La boucle attend 5s avant de réessayer.
+                 # print("Warning: Port série non disponible ou fermé.") # Redondant
+                 stop_thread.wait(1) # Petite pause supplémentaire
+
+        # Gérer les exceptions majeures hors de la boucle de lecture
         except Exception as e_main:
-            # ... (Gestion erreur majeure identique à avant) ...
-            serial_error_message = f"Erreur majeure thread série: {e_main}"; print(serial_error_message)
-            if ser: 
-                try: ser.close() 
+            serial_error_message = f"Erreur majeure thread série: {e_main}"
+            print(f"ERREUR MAJEURE: {serial_error_message}")
+            # Tenter de fermer proprement si possible
+            if ser:
+                try: ser.close()
                 except Exception: pass
             ser = None
+            # Mettre à jour l'état global avec l'erreur majeure
             with data_lock: latest_data['error'] = serial_error_message
             socketio.emit('serial_status', {'status': 'error', 'port': SERIAL_PORT, 'message': str(e_main)})
             socketio.emit('update_data', latest_data)
+            # Attendre avant de potentiellement relancer la boucle (si elle n'est pas arrêtée)
             stop_thread.wait(5)
 
     # --- Nettoyage ---
-    # ... (identique à avant) ...
     print("Arrêt thread série demandé.")
-    if ser and ser.is_open: 
-        try: ser.close(); print(f"Port {SERIAL_PORT} fermé.") 
-        except Exception as e: print(f"Erreur fermeture: {e}")
-    ser = None; print("Thread série terminé.")
+    if ser and ser.is_open:
+        try: ser.close(); print(f"Port {SERIAL_PORT} fermé.")
+        except Exception as e: print(f"Erreur fermeture port: {e}")
+    ser = None
+    print("Thread série terminé.")
 
 
 # --- Routes Flask ---

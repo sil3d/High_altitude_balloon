@@ -1,6 +1,6 @@
 #include <SoftwareSerial.h>
 
-SoftwareSerial pmsSerial(2, 3); // RX, TX
+SoftwareSerial pmsSerial(15, 35); // RX, TX  // vert à 15 , 35 à bleu
 
 struct pms5003data {
   uint16_t framelen;
