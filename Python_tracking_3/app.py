@@ -9,7 +9,6 @@ from flask import Flask, render_template, send_file, request, jsonify # Ajout js
 from flask_socketio import SocketIO, emit
 import pandas as pd # Pour la version Excel/DataFrame
 import io # Pour la version Excel
-import openpyxl # Nécessaire pour to_excel
 import math # Pour haversine manuel
 
 # --- Configuration ---

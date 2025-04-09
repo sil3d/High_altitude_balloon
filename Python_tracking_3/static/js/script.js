@@ -110,7 +110,6 @@ $(document).ready(function() {
 
     // =========================================================================
     // Initialisation Carte & Leaflet
-    // =========================================================================
     function initMap() {
         try {
             map = L.map('map', {
@@ -129,30 +128,39 @@ $(document).ready(function() {
             const balloonIcon = L.icon({ iconUrl: CONFIG.BALLOON_MARKER_ICON_URL, iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
             const userIcon = L.icon({ iconUrl: CONFIG.USER_MARKER_ICON_URL, iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
 
-            // --- Markers ---
-            balloonMarker = L.marker(CONFIG.MAP_INITIAL_COORDS, {
-                icon: balloonIcon,
-                opacity: 0.6 // Semi-transparent au début
-            }).addTo(map).bindPopup("Ballon (en attente de données GPS)");
+            // --- Définir la position initiale PAR DÉFAUT du ballon ---
+            // On utilise les coordonnées initiales de la carte comme point de départ
+            // Cela permet de tester le routage même sans données réelles du ballon.
+            lastKnownBalloonPosition = L.latLng(CONFIG.MAP_INITIAL_COORDS[0], CONFIG.MAP_INITIAL_COORDS[1]);
+            console.log("Setting DEFAULT balloon position for testing:", lastKnownBalloonPosition);
 
-            userMarker = L.marker(CONFIG.MAP_INITIAL_COORDS, {
+            // --- Markers ---
+            // Initialiser le marqueur ballon à sa position par défaut
+            balloonMarker = L.marker(lastKnownBalloonPosition, { // Utilise la position par défaut
+                icon: balloonIcon,
+                opacity: 0.8 // Légèrement différent pour indiquer que c'est peut-être pas une donnée fraîche
+            }).addTo(map).bindPopup("Ballon (Position initiale/par défaut)"); // Mettre à jour le popup
+
+            userMarker = L.marker(CONFIG.MAP_INITIAL_COORDS, { // Le marqueur utilisateur reste à sa position initiale (invisible)
                 icon: userIcon,
                 opacity: 0 // Invisible au début
             }).addTo(map).bindPopup("Ma Position");
 
             // --- Balloon Track ---
             balloonTrack = L.polyline([], { color: 'red', weight: 3 }).addTo(map);
+            // Optionnel: Ajouter le point initial à la trace si vous voulez la voir démarrer de là
+            // balloonTrack.addLatLng(lastKnownBalloonPosition);
 
             // --- Routing Control ---
             routingControl = L.Routing.control({
-                waypoints: [null, null], // Seront définis dynamiquement
+                waypoints: [null, null], // Toujours initialisés à null, seront mis à jour par setWaypoints
                 routeWhileDragging: false,
-                show: false, // Cacher le panneau texte par défaut
+                show: false,
                 addWaypoints: false,
                 draggableWaypoints: false,
                 lineOptions: { styles: [{ color: 'blue', opacity: 0.6, weight: 4 }] },
                 router: L.Routing.osrmv1({ serviceUrl: CONFIG.OSRM_SERVICE_URL }),
-                createMarker: () => null // Pas de marqueurs pour les waypoints du routage
+                createMarker: () => null
             }).addTo(map);
 
             // Cacher le conteneur du panneau de routage au début
@@ -162,7 +170,10 @@ $(document).ready(function() {
              routingControl.on('routesfound', handleRouteFound);
              routingControl.on('routingerror', handleRouteError);
 
-            console.log("Map initialized successfully.");
+            console.log("Map initialized successfully (with default balloon position).");
+
+            // Mettre à jour l'affichage initial de la distance/route (sera N/A car user position est null)
+            updateDistanceAndRoute();
 
         } catch (error) {
             console.error("Map Initialization failed:", error);
