@@ -1,49 +1,35 @@
+/* Ajoutez ici vos styles personnalisés si Bootstrap ne suffit pas */
 body {
-    /* font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; */
-    background-color: #f8f9fa; /* Gris très clair Bootstrap */
+    padding-top: 56px; /* Hauteur de la navbar fixe */
+    background-color: #f8f9fa; /* Fond légèrement gris */
 }
 
-.navbar {
-    box-shadow: 0 2px 4px rgba(0,0,0,.1);
-}
-
-.card {
-    border: none; /* Enlever les bordures par défaut des cards */
+.data-card {
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    border: none;
 }
 
 .card-header {
-    font-weight: 500;
+    background-color: #e9ecef; /* Fond d'en-tête de carte */
+    font-weight: bold;
+    color: #495057;
 }
 
 #map {
-    border-radius: 0.375rem; /* Arrondir les coins comme les cards Bootstrap */
-     box-shadow: inset 0 1px 3px rgba(0,0,0,.1);
+    border-radius: 0.25rem; /* Coins arrondis pour la carte */
+    border: 1px solid #dee2e6;
 }
 
-#altitudeChartContainer {
-    position: relative; /* Nécessaire pour Chart.js responsive */
-    padding: 1rem;
+/* Style pour le conteneur de routage Leaflet si besoin */
+.leaflet-routing-container {
+    background: rgba(255, 255, 255, 0.8);
+    padding: 5px;
+    border-radius: 4px;
+     max-height: 200px; /* Limiter la hauteur */
+     overflow-y: auto; /* Ajouter une barre de défilement si nécessaire */
 }
 
-/* Style pour les marqueurs Leaflet si besoin */
-.leaflet-popup-content-wrapper {
-    border-radius: 5px;
-}
-
-/* Style pour les indicateurs de statut */
-#statusIndicator {
-    font-size: 0.9em;
-}
-
-/* Rendre les list-group-item un peu moins espacés */
-.list-group-item {
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-}
-
-/* Icônes dans les boutons */
-.btn svg {
-    vertical-align: middle;
-    margin-right: 0.3em;
-    margin-bottom: 0.1em; /* Ajustement fin vertical */
+/* Indicateur de statut connexion */
+.status-indicator {
+    transition: background-color 0.5s ease;
 }
