@@ -10,7 +10,7 @@ from geopy.distance import geodesic
 import math # Import math module for isnan check
 
 # --- Configuration ---
-SERIAL_PORT = 'COM4'  # Adapte si ton port COM est différent
+SERIAL_PORT = 'COM5'  # Adapte si ton port COM est différent
 BAUD_RATE = 115200
 EXCEL_FILE = 'data/balloon_data.xlsx'
 LOG_FILE = 'serial_log.txt' # Pour débugger les données brutes reçues
@@ -84,7 +84,19 @@ def parse_arduino_data(line):
                     }
             elif part.startswith("OZ,"):
                 data['other'] = data.get('other', {}) # Crée 'other' si n'existe pas
-                data['other']['ozone'] = int(part[3:])
+                ozone_value_str = part[3:] # Récupère la valeur (qui peut être "ERR")
+                if ozone_value_str == "ERR":
+                    # Le capteur Arduino a signalé une erreur
+                    data['other']['ozone'] = None # Ou une autre valeur indiquant l'erreur, comme 'ERROR', ou math.nan si tu préfères
+                    print("Avertissement: Donnée Ozone marquée comme 'ERR' par l'Arduino.")
+                else:
+                    # Essayer de convertir en entier si ce n'est pas "ERR"
+                    try:
+                        data['other']['ozone'] = int(ozone_value_str)
+                    except ValueError:
+                        # Gérer le cas où ce n'est pas "ERR" mais quand même pas un entier valide
+                        print(f"Erreur de parsing Ozone: impossible de convertir '{ozone_value_str}' en entier.")
+                        data['other']['ozone'] = None # Ou une autre valeur d'erreur
             elif part.startswith("UV,"):
                 data['other'] = data.get('other', {}) # Crée 'other' si n'existe pas
                 data['other']['uvIndex'] = float(part[3:])

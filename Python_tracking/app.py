@@ -9,7 +9,7 @@ import os
 app = Flask(__name__)
 
 # Configuration
-SERIAL_PORT = 'COM3'  # À modifier selon votre port série
+SERIAL_PORT = 'COM5'  # À modifier selon votre port série
 BAUD_RATE = 115200
 EXCEL_FILE = 'donnees_ballon.xlsx'
 
