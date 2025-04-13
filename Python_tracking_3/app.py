@@ -12,7 +12,7 @@ import io # Pour la version Excel
 import math # Pour haversine manuel
 
 # --- Configuration ---
-SERIAL_PORT ='COM5'
+SERIAL_PORT ='COM3'
 BAUD_RATE = 115200
 DATA_FORMAT = 'excel'
 DATA_FILENAME = 'data/balloon_data.xlsx'

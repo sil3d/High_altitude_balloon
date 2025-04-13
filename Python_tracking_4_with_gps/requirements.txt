@@ -1,0 +1,10 @@
+
+flask 
+pyserial 
+pandas  
+openpyxl 
+Flask-SocketIO
+geopy
+haversine      
+python-dotenv
+eventlet       

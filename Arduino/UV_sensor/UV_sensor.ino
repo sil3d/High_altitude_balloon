@@ -1,7 +1,7 @@
 //UV SENSOR for this code i don't know why, but i don't use 15 in real life it can retrieve data for 3.3V and GND only 
 //on the T-display lora32 LILYGO
 
-#define UV_SENSOR_PIN 15  // Pin ADC de l'ESP32 connecté à SIG du capteur
+#define UV_SENSOR_PIN 32  // Pin ADC de l'ESP32 connecté à SIG du capteur
 
 void setup() {
     Serial.begin(115200);  // Initialisation de la communication série

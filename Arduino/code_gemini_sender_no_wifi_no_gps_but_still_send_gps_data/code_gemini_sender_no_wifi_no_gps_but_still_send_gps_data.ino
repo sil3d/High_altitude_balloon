@@ -29,7 +29,7 @@
 #define BLUE_LED 4    // Vérifiez si c'est la bonne broche pour votre LED
 
 // Capteur UV (Analogique)
-#define UV_SENSOR_PIN 15 // Vérifiez que c'est bien une broche ADC valide
+#define UV_SENSOR_PIN 32 // Vérifiez que c'est bien une broche ADC valide
 
 // GPS (Module NEO-6M)
 #define GPS_RX_PIN 34   // Broche RX de l'ESP32 (connectée au TX du GPS)
@@ -49,6 +49,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 BME280 myBME;                  // Objet SparkFun BME280
 SparkFun_ENS160 myENS;         // Objet SparkFun ENS160
 DFRobot_OzoneSensor Ozone;     // Objet DFRobot Ozone
+
+
 
 // --- Variables Globales ---
 float temperature = NAN; // Not a Number par défaut

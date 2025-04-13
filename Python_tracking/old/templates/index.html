@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracker GPS</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            width: 100%;
+            height: 90vh;
+        }
+        .info-bar {
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+        }
+        .status {
+            color: #d9534f;
+            font-weight: bold;
+        }
+        .status.connected {
+            color: #5cb85c;
+        }
+    </style>
+</head>
+<body>
+    <div class="info-bar">
+        <span id="connection-status" class="status">Connexion...</span> | 
+        Points: <span id="points-count">0</span> | 
+        Dernière position: <span id="last-position">N/A</span>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        // Initialisation de la carte
+        const map = L.map('map').setView([14.486680, -17.078957], 12); // Vue par défaut sur Dakar
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Variables pour stocker les données du trajet
+        let trackPoints = [];
+        let trackLine = null;
+        let initialMarker = null;
+        let currentMarker = null;
+        
+        // Connexion WebSocket
+        const socket = io();
+        const statusElement = document.getElementById('connection-status');
+        const pointsCountElement = document.getElementById('points-count');
+        const lastPositionElement = document.getElementById('last-position');
+        
+        socket.on('connect', function() {
+            statusElement.textContent = 'Connecté';
+            statusElement.classList.add('connected');
+        });
+        
+        socket.on('disconnect', function() {
+            statusElement.textContent = 'Déconnecté';
+            statusElement.classList.remove('connected');
+        });
+        
+        // Réception de la position initiale
+        socket.on('initial_position', function(data) {
+            console.log('Position initiale reçue:', data);
+            setInitialPosition(data);
+        });
+        
+        // Réception du trajet complet (au chargement)
+        socket.on('full_track', function(data) {
+            console.log('Trajet complet reçu:', data);
+            trackPoints = data;
+            updateTrackLine();
+            updateUI();
+            
+            // Zoom sur le trajet
+            if (trackPoints.length > 0) {
+                const bounds = trackPoints.map(p => [p.lat, p.lon]);
+                map.fitBounds(bounds);
+            }
+        });
+        
+        // Réception des mises à jour en temps réel
+        socket.on('gps_update', function(point) {
+            console.log('Nouveau point GPS:', point);
+            trackPoints.push(point);
+            updateTrackLine();
+            updateCurrentPosition(point);
+            updateUI();
+        });
+        
+        function setInitialPosition(position) {
+            if (!initialMarker) {
+                initialMarker = L.marker([position.lat, position.lon], {
+                    title: 'Point de départ',
+                    icon: L.icon({
+                        iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34]
+                    })
+                }).addTo(map);
+                initialMarker.bindPopup('Point de départ - ' + position.timestamp).openPopup();
+                
+                // Centrer la carte sur la position initiale
+                map.setView([position.lat, position.lon], 15);
+            }
+        }
+        
+        function updateCurrentPosition(position) {
+            if (!currentMarker) {
+                currentMarker = L.marker([position.lat, position.lon], {
+                    title: 'Position actuelle',
+                    icon: L.icon({
+                        iconUrl: 'https://cdn.rawgit.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34]
+                    })
+                }).addTo(map);
+            } else {
+                currentMarker.setLatLng([position.lat, position.lon]);
+            }
+            
+            currentMarker.bindPopup('Position actuelle - ' + position.timestamp);
+            
+            // Centrer la carte sur la nouvelle position
+            map.panTo([position.lat, position.lon]);
+        }
+        
+        function updateTrackLine() {
+            // Supprimer l'ancienne ligne si elle existe
+            if (trackLine) {
+                map.removeLayer(trackLine);
+            }
+            
+            // Créer une nouvelle ligne avec tous les points
+            if (trackPoints.length > 1) {
+                const coordinates = trackPoints.map(p => [p.lat, p.lon]);
+                trackLine = L.polyline(coordinates, {
+                    color: 'blue',
+                    weight: 4,
+                    opacity: 0.7
+                }).addTo(map);
+            }
+        }
+        
+        function updateUI() {
+            pointsCountElement.textContent = trackPoints.length;
+            
+            if (trackPoints.length > 0) {
+                const lastPoint = trackPoints[trackPoints.length - 1];
+                lastPositionElement.textContent = `Lat: ${lastPoint.lat.toFixed(6)}, Lon: ${lastPoint.lon.toFixed(6)} - ${lastPoint.timestamp}`;
+            }
+        }
+        
+        // Récupérer les données existantes au chargement de la page
+        fetch('/api/track_data')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Données existantes:', data);
+                
+                if (data.initial_position) {
+                    setInitialPosition(data.initial_position);
+                }
+                
+                if (data.track && data.track.length > 0) {
+                    trackPoints = data.track;
+                    updateTrackLine();
+                    updateCurrentPosition(trackPoints[trackPoints.length - 1]);
+                    updateUI();
+                    
+                    // Zoom sur le trajet
+                    const bounds = trackPoints.map(p => [p.lat, p.lon]);
+                    map.fitBounds(bounds);
+                }
+            })
+            .catch(error => console.error('Erreur lors du chargement des données:', error));
+    </script>
+</body>
+</html>

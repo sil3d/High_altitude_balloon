@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suivi Ballon LILYGO</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        #map { height: 500px; width: 100%; }
+        #altitudeChart { max-height: 300px; }
+        .data-card { margin-bottom: 1rem; }
+        .data-label { font-weight: bold; color: #555; }
+        .data-value { font-size: 1.1em; }
+        .status-indicator {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: grey;
+            margin-left: 10px;
+            vertical-align: middle;
+            transition: background-color 0.5s ease;
+        }
+        .status-ok { background-color: green; } /* WebSocket OK */
+        .status-error { background-color: red; } /* Erreur WebSocket ou Série */
+        .status-receiving { background-color: orange; } /* Données Série reçues */
+        .status-connecting { background-color: blue; } /* Connexion WebSocket ou Série */
+        .status-disconnected { background-color: grey; } /* Déconnecté */
+        .leaflet-routing-container {
+            background: rgba(255, 255, 255, 0.8); padding: 5px;
+            border-radius: 4px; max-height: 200px; overflow-y: auto;
+        }
+        body { padding-top: 70px; } /* Ajuster si navbar plus haute */
+        .navbar-brand { margin-right: 1rem; }
+        .navbar-text { margin-right: 1rem; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">🚀 Tracker Ballon</a>
+             <span class="navbar-text">
+                Série: <span id="serial-status-indicator" class="status-indicator status-disconnected" title="Port Série Déconnecté"></span>
+                <span id="serial-status-text" class="ms-1 d-none d-md-inline">Déconnecté</span> <!-- Masqué sur petit écran -->
+            </span>
+             <span class="navbar-text">
+                Websocket: <span id="connection-status" class="status-indicator status-disconnected" title="Websocket Déconnecté"></span>
+            </span>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                 <div id="navbar-error" class="navbar-text text-danger ms-md-3 d-none"></div> <!-- Pour afficher erreur série concise -->
+                <ul class="navbar-nav ms-auto">
+                     <li class="nav-item">
+                        <button id="track-me-btn" class="btn btn-sm btn-outline-info me-2 mt-1 mt-lg-0">📍 Localise Moi</button>
+                    </li>
+                    <li class="nav-item">
+                        <button id="toggle-follow-btn" class="btn btn-sm btn-outline-primary me-2 mt-1 mt-lg-0">Suivi Ballon: OFF</button>
+                    </li>
+                    <li class="nav-item">
+                        <!-- Lien pour /download (s'adaptera au format défini dans app.py) -->
+                        <a href="/download" class="btn btn-sm btn-success mt-1 mt-lg-0" id="download-btn" download>Télécharger Données</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Colonne Données -->
+            <div class="col-lg-4">
+                <h4>Données Temps Réel</h4>
+                 <!-- Affichage d'erreur détaillée -->
+                 <div id="error-alert" class="alert alert-danger d-none" role="alert">
+                     Erreur: <span id="error-message"></span>
+                 </div>
+
+                <div class="card data-card">
+                    <div class="card-header">📡 GPS & Mouvement</div>
+                    <div class="card-body">
+                        <p><span class="data-label">Latitude:</span> <span id="latitude" class="data-value">N/A</span></p>
+                        <p><span class="data-label">Longitude:</span> <span id="longitude" class="data-value">N/A</span></p>
+                        <p><span class="data-label">Altitude (GPS):</span> <span id="altitude_gps" class="data-value">N/A</span> m</p>
+                        <p><span class="data-label">Satellites:</span> <span id="satellites" class="data-value">N/A</span></p>
+                        <p><span class="data-label">Vitesse:</span> <span id="speed_kmh" class="data-value">N/A</span> km/h</p>
+                        <p><span class="data-label">RSSI:</span> <span id="rssi" class="data-value">N/A</span> dBm</p>
+                    </div>
+                </div>
+
+                <div class="card data-card">
+                    <div class="card-header">🌡️ Environnement</div>
+                    <div class="card-body">
+                        <p><span class="data-label">Température:</span> <span id="temperature" class="data-value">N/A</span> °C</p>
+                        <p><span class="data-label">Pression:</span> <span id="pressure" class="data-value">N/A</span> hPa</p>
+                        <p><span class="data-label">Humidité:</span> <span id="humidity" class="data-value">N/A</span> %</p>
+                        <p><span class="data-label">Altitude (Baro):</span> <span id="altitude_bme" class="data-value">N/A</span> m</p>
+                    </div>
+                </div>
+
+                 <div class="card data-card">
+                    <div class="card-header">🌬️ Qualité Air & Autres</div>
+                    <div class="card-body">
+                         <p><span class="data-label">Qualité Air (Indice):</span> <span id="air_quality" class="data-value">N/A</span> (<span id="air_quality_text">N/A</span>)</p>
+                        <p><span class="data-label">TVOC:</span> <span id="tvoc" class="data-value">N/A</span> ppb</p>
+                        <p><span class="data-label">eCO2:</span> <span id="eco2" class="data-value">N/A</span> ppm</p>
+                        <p><span class="data-label">Ozone:</span> <span id="ozone" class="data-value">N/A</span> ppb</p>
+                        <p><span class="data-label">Indice UV:</span> <span id="uv_index" class="data-value">N/A</span></p>
+                    </div>
+                </div>
+                 <div class="card data-card">
+                     <div class="card-body">
+                         <span class="data-label">Dernière MAJ Serveur:</span> <span id="timestamp">Jamais</span>
+                     </div>
+                 </div>
+            </div>
+
+            <!-- Colonne Carte & Graphique -->
+            <div class="col-lg-8">
+                <h4>📍 Carte de Suivi</h4>
+                 <div class="card data-card">
+                     <div class="card-body p-0">
+                         <div id="map"></div>
+                     </div>
+                     <div class="card-footer">
+                         <span class="data-label">Distance Ballon:</span> <span id="distance" class="data-value">N/A</span>
+                         <span class="data-label ms-3">Route estimée:</span> <span id="route-info" class="data-value">N/A</span>
+                     </div>
+                 </div>
+
+                <h4>📈 Graphique Altitude (Barométrique)</h4>
+                 <div class="card data-card">
+                     <div class="card-body">
+                        <canvas id="altitudeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" integrity="sha384-Gr6Lu2Ajx28mzwyVR8CFkULdCU7kMlZ9UthllibdOSo6qAiN+yXNHqtgdTvFXMT4" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
