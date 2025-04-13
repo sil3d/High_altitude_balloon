@@ -4,7 +4,7 @@ $(document).ready(function() {
     // =========================================================================
     const CONFIG = {
         MAP_INITIAL_COORDS: [14.498, -17.071], // Somone
-        MAP_INITIAL_ZOOM: 13,
+        MAP_INITIAL_ZOOM: 9,
         MAP_MAX_BALLOON_TRACK_POINTS: 500, // Max points in balloon track line
         CHART_MAX_POINTS: 100, // Max points in altitude chart
         STALE_DATA_THRESHOLD_MS: 60000, // Mark data as stale after 60 seconds

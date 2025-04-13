@@ -40,6 +40,8 @@
         body { padding-top: 70px; } /* Ajuster si navbar plus haute */
         .navbar-brand { margin-right: 1rem; }
         .navbar-text { margin-right: 1rem; }
+        .pms-label { width: 90px; display: inline-block;} /* Pour aligner les valeurs PMS */
+        .pms-value { margin-left: 5px; }
     </style>
 </head>
 <body>
@@ -48,7 +50,7 @@
             <a class="navbar-brand" href="#">🚀 Tracker Ballon</a>
              <span class="navbar-text">
                 Série: <span id="serial-status-indicator" class="status-indicator status-disconnected" title="Port Série Déconnecté"></span>
-                <span id="serial-status-text" class="ms-1 d-none d-md-inline">Déconnecté</span> <!-- Masqué sur petit écran -->
+                <span id="serial-status-text" class="ms-1 d-none d-md-inline">Déconnecté</span>
             </span>
              <span class="navbar-text">
                 Websocket: <span id="connection-status" class="status-indicator status-disconnected" title="Websocket Déconnecté"></span>
@@ -57,7 +59,7 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                 <div id="navbar-error" class="navbar-text text-danger ms-md-3 d-none"></div> <!-- Pour afficher erreur série concise -->
+                 <div id="navbar-error" class="navbar-text text-danger ms-md-3 d-none"></div>
                 <ul class="navbar-nav ms-auto">
                      <li class="nav-item">
                         <button id="track-me-btn" class="btn btn-sm btn-outline-info me-2 mt-1 mt-lg-0">📍 Localise Moi</button>
@@ -66,7 +68,6 @@
                         <button id="toggle-follow-btn" class="btn btn-sm btn-outline-primary me-2 mt-1 mt-lg-0">Suivi Ballon: OFF</button>
                     </li>
                     <li class="nav-item">
-                        <!-- Lien pour /download (s'adaptera au format défini dans app.py) -->
                         <a href="/download" class="btn btn-sm btn-success mt-1 mt-lg-0" id="download-btn" download>Télécharger Données</a>
                     </li>
                 </ul>
@@ -79,7 +80,6 @@
             <!-- Colonne Données -->
             <div class="col-lg-4">
                 <h4>Données Temps Réel</h4>
-                 <!-- Affichage d'erreur détaillée -->
                  <div id="error-alert" class="alert alert-danger d-none" role="alert">
                      Erreur: <span id="error-message"></span>
                  </div>
@@ -109,11 +109,18 @@
                  <div class="card data-card">
                     <div class="card-header">🌬️ Qualité Air & Autres</div>
                     <div class="card-body">
+                        <!-- Qualité Air -->
                          <p><span class="data-label">Qualité Air (Indice):</span> <span id="air_quality" class="data-value">N/A</span> (<span id="air_quality_text">N/A</span>)</p>
                         <p><span class="data-label">TVOC:</span> <span id="tvoc" class="data-value">N/A</span> ppb</p>
                         <p><span class="data-label">eCO2:</span> <span id="eco2" class="data-value">N/A</span> ppm</p>
+                        <!-- Ozone / UV -->
                         <p><span class="data-label">Ozone:</span> <span id="ozone" class="data-value">N/A</span> ppb</p>
                         <p><span class="data-label">Indice UV:</span> <span id="uv_index" class="data-value">N/A</span></p>
+                        <!-- PMS <<< AJOUTÉ -->
+                        <hr> <!-- Séparateur visuel -->
+                        <p><span class="data-label pms-label">PM1.0 (Std):</span> <span id="pm1_std" class="data-value pms-value">N/A</span> µg/m³</p>
+                        <p><span class="data-label pms-label">PM2.5 (Std):</span> <span id="pm25_std" class="data-value pms-value">N/A</span> µg/m³</p>
+                        <p><span class="data-label pms-label">PM10 (Std):</span> <span id="pm10_std" class="data-value pms-value">N/A</span> µg/m³</p>
                     </div>
                 </div>
                  <div class="card data-card">
@@ -155,7 +162,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
-    <!-- Custom JS -->
+    <!-- Custom JS (Doit être modifié pour gérer les nouvelles clés PMS) -->
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
