@@ -14,10 +14,11 @@ import pandas as pd
 import io
 import math
 
+
 # --- Configuration ---
 SERIAL_PORT = 'COM5' # Adaptez si nécessaire
 BAUD_RATE = 115200   # Doit correspondre au Serial.begin() du RECEIVER ESP32
-DATA_FORMAT = 'excel' # Format pour le téléchargement ('excel' ou 'csv')
+DATA_FORMAT = 'xlsx' # Format pour le téléchargement ('excel' ou 'csv')
 DATA_DIR = 'data'
 DB_FILENAME = os.path.join(DATA_DIR, 'balloon_data.db') # <<< Fichier Base de Données
 DOWNLOAD_FILENAME_BASE = 'balloon_data' # Sera .xlsx ou .csv
@@ -402,14 +403,21 @@ def download_data():
         output_filename = f"{DOWNLOAD_FILENAME_BASE}.{DATA_FORMAT}"
         local_filepath = os.path.join(DATA_DIR, output_filename) # Pour sauvegarde locale optionnelle
 
-        if DATA_FORMAT == 'excel':
+        if DATA_FORMAT == 'xlsx':
             output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False, sheet_name='TelemetryData')
+            # Utilisation explicite de 'openpyxl' comme moteur (bonne pratique)
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='TelemetryData')
             output.seek(0)
+            # --- MODIFIÉ: Le mimetype pour .xlsx ---
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            download_name=output_filename
-            try: df.to_excel(local_filepath, index=False, engine='openpyxl') # Sauvegarde locale
-            except Exception as save_e: print(f"Erreur sauvegarde locale Excel: {save_e}")
+            download_name = output_filename # Le nom inclut déjà .xlsx
+            try:
+                # Sauvegarde locale en .xlsx
+                df.to_excel(local_filepath, index=False, engine='openpyxl')
+                print(f"Fichier sauvegardé localement : {local_filepath}")
+            except Exception as save_e:
+                print(f"Erreur sauvegarde locale Excel (.xlsx): {save_e}")
         elif DATA_FORMAT == 'csv':
             output = io.StringIO(); df.to_csv(output, index=False, quoting=csv.QUOTE_NONNUMERIC)
             output_bytes = io.BytesIO(output.getvalue().encode('utf-8')); output_bytes.seek(0); output = output_bytes

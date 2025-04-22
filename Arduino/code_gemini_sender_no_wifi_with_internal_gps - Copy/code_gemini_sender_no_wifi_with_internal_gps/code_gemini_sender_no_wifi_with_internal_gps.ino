@@ -154,8 +154,8 @@ void setup() {
   Serial.begin(115200);
   while (!Serial)
     ;
-  Serial.println("\n\n--- Démarrage TTGO T-Beam V1.2 Multi-Sensor Sender ---");
-  Serial.println("[CONFIG] Mode: Long Range LoRa activé.");
+  Serial.println("\n\n--- Démarrage TTGO T-Beam V1.2 Multi-Sensor Sender (GPS INTERNE + PMS5003 + DFRobot BME280) ---"); // <<< MODIFIÉ
+
   // Rappel Configuration Matérielle
   Serial.println("[CONFIG] Configuration Matérielle Utilisée:");
   Serial.println("[CONFIG]   GPS Interne -> Serial2 (RX=34, TX=12)");
@@ -178,40 +178,6 @@ void setup() {
   Serial.print("[INIT] Initialisation I2C (SDA=21, SCL=22)... ");
   Wire.begin(21, 22);
   Serial.println("OK");
-  // Initialisation LoRa (AVEC PARAMÈTRES LONGUE PORTÉE)
-  Serial.print("[INIT] Initialisation LoRa (868 MHz)... ");
-  Serial.printf("\n       Pins: SCK=%d, MISO=%d, MOSI=%d, CS=%d, RST=%d, IRQ=%d\n", LORA_SCK, LORA_MISO, LORA_MOSI, LORA_CS, LORA_RST, LORA_IRQ);
-  SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_CS);
-  LoRa.setPins(LORA_CS, LORA_RST, LORA_IRQ);
-  if (!LoRa.begin(868E6)) {
-    Serial.println("[INIT]   -> ECHEC LoRa! Vérifiez module/broches.");
-    loraInitialized = false;
-    if (displayInitialized) updateDisplayWithMessage("Init LoRa FAILED");
-  } else {
-    loraInitialized = true;
-    Serial.println("[INIT]   -> LoRa OK (868 MHz). Configuration Longue Portée...");
-
-    // --- PARAMÈTRES LoRa POUR LONGUE PORTÉE ---
-    // 1. Augmenter la puissance d'émission (Max 20dBm, vérifier réglementation Sénégal)
-    LoRa.setTxPower(20);
-    Serial.println("[INIT]      Tx Power: 20 dBm (Vérifier réglementation!)");
-
-    // 2. Augmenter le Spreading Factor (compromis portée/temps)
-    LoRa.setSpreadingFactor(10); // Essayer 10 ou 11 (était 7)
-    Serial.println("[INIT]      Spreading Factor: 10");
-
-    // 3. Définir la Bande Passante (standard 125kHz)
-    LoRa.setSignalBandwidth(125E3);
-    Serial.println("[INIT]      Signal Bandwidth: 125 kHz");
-
-    // 4. Augmenter le Taux de Codage (max robustesse 4/8)
-    LoRa.setCodingRate4(8); // (était implicitement 5)
-    Serial.println("[INIT]      Coding Rate: 4/8");
-    // --- FIN PARAMÈTRES LoRa ---
-
-    if (displayInitialized) updateDisplayWithMessage("Init LoRa OK (LR Mode)");
-  }
-  delay(500);
 
   // Initialisation GPS Interne sur Serial2
   Serial.print("[INIT] Initialisation GPS Interne (Serial2 - RX=");
